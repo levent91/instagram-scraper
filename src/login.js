@@ -1,7 +1,8 @@
 const Apify = require('apify');
+const http = require('http');
 const { pleaseOpen, liveView, localhost } = require('./asci-texts.js');
 const { authorize, close } = require('./submit-page.js');
-const http = require('http');
+
 const { sleep } = Apify.utils;
 
 /**
@@ -12,7 +13,7 @@ const { sleep } = Apify.utils;
  * @return Does not return anything
  */
 const login = async (username, password, page) => {
-    Apify.utils.log.info(`Attempting to log in`);
+    Apify.utils.log.info('Attempting to log in');
 
     try {
         await page.goto('https://www.instagram.com/accounts/login/?source=auth_switcher');
@@ -77,14 +78,24 @@ const login = async (username, password, page) => {
 
         await page.waitForNavigation();
 
-        Apify.utils.log.info(`Successfully logged in`);
+        Apify.utils.log.info('Successfully logged in');
         await sleep(3000);
     } catch (error) {
         Apify.utils.log.info('Failed to log in');
         Apify.utils.log.error(error);
+
+        // store screenShot in case of failure
+        const screenShot = await page.screenshot();
+        await Apify.setValue('LOGINFAILED_SCREENSHOT', screenShot, { contentType: 'image/png' });
+        // store HTML in case of failure
+        const pageHtml = await page.evaluate(async () => {
+            return document.documentElement.innerHTML;
+        });
+        await Apify.setValue('LOGINFAILED_HTML', pageHtml, { contentType: 'text/html' });
+
         process.exit(1);
     }
-}
+};
 
 module.exports = {
     login,
