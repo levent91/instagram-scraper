@@ -27,11 +27,16 @@ const login = async (username, password, page) => {
         await sleep(1000);
 
         await page.click('button[type="submit"]');
-        await sleep(5000);
+
+        await Promise.allSettled([
+            page.waitForResponse((response) => response.url().includes('/ajax'), { timeout: 5000 }),
+            page.click('button[type="submit"]'),
+        ]);
+
         const invalidCredentials = await page.evaluate(() => {
-            return document.querySelector('#slfErrorAlert');
+            return document.querySelector('#slfErrorAlert') !== null;
         });
-        if (invalidCredentials !== null) {
+        if (invalidCredentials) {
             throw new Error('Invalid credentials.');
         }
 
