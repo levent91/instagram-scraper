@@ -27,6 +27,13 @@ const login = async (username, password, page) => {
         await sleep(1000);
 
         await page.click('button[type="submit"]');
+        await sleep(5000);
+        const invalidCredentials = await page.evaluate(() => {
+            return document.querySelector('#slfErrorAlert');
+        });
+        if (invalidCredentials !== null) {
+            throw new Error('Invalid credentials.');
+        }
 
         await page.waitForNavigation();
         await sleep(1000);
