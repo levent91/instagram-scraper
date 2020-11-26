@@ -3,7 +3,7 @@ const http = require('http');
 const { pleaseOpen, liveView, localhost } = require('./asci-texts.js');
 const { authorize, close } = require('./submit-page.js');
 
-const { sleep } = Apify.utils;
+const { sleep, puppeteer } = Apify.utils;
 
 /**
  * Attempts log user into instagram with provided username and password
@@ -97,13 +97,11 @@ const login = async (username, password, page) => {
         Apify.utils.log.error(error);
 
         // store screenShot in case of failure
-        const screenShot = await page.screenshot();
-        await Apify.setValue('LOGINFAILED_SCREENSHOT', screenShot, { contentType: 'image/png' });
-        // store HTML in case of failure
-        const pageHtml = await page.evaluate(async () => {
-            return document.documentElement.innerHTML;
+        await puppeteer.saveSnapshot(page, {
+            key: 'LOGINFAILED',
+            saveScreenshot: true,
+            saveHtml: true,
         });
-        await Apify.setValue('LOGINFAILED_HTML', pageHtml, { contentType: 'text/html' });
 
         process.exit(1);
     }
