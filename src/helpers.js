@@ -477,24 +477,27 @@ const loadMore = async ({ itemSpec, page, retry = 0, type }) => {
             }
 
             if (status !== 200) {
-                log(itemSpec, `Got error status while scrolling: ${status}`, LOG_TYPES.ERROR);
-            } else {
-                let json;
-                try {
-                    json = await response.json();
-                } catch (e) {
-                    log(itemSpec, 'Cannot parse response body', LOG_TYPES.EXCEPTION);
-                    console.dir(response);
-                }
-
-                // eslint-disable-next-line prefer-destructuring
-                if (json) data = json.data;
+                // usually 302 redirecting to login
+                throw new Error(`Got error status while scrolling: ${status}`);
             }
-            // }
+
+            let json;
+            try {
+                json = await response.json();
+            } catch (e) {
+                log(itemSpec, 'Cannot parse response body', LOG_TYPES.EXCEPTION);
+                console.dir(response);
+            }
+
+            // eslint-disable-next-line prefer-destructuring
+            if (json) data = json.data;
         } catch (error) {
             // Apify.utils.log.error(error);
-            log(itemSpec, 'Non fatal error occured while scrolling:', LOG_TYPES.WARNING);
-            console.dir(error);
+            if (error.message.includes('Got error')) {
+                throw error;
+            } else {
+                log(itemSpec, 'Non fatal error occured while scrolling:', LOG_TYPES.WARNING);
+            }
         }
     }
 
@@ -505,18 +508,20 @@ const loadMore = async ({ itemSpec, page, retry = 0, type }) => {
         });
     }
 
+    const retryDelay = (retry || 1) * 1000;
+
     if (!data && retry < 10 && (scrolled[1] || retry < 5)) {
         // We scroll the other direction than usual
         if (type === 'posts') {
             await page.evaluate(() => window.scrollBy(0, -1000));
         }
-        const retryDelay = retry ? (retry + 1) * retry * 1000 : (retry + 1) * 1000;
         log(itemSpec, `Retry scroll after ${retryDelay / 1000} seconds`);
         await sleep(retryDelay);
         return loadMore({ itemSpec, page, retry: retry + 1, type });
     }
 
-    await sleep(100);
+    await sleep(retryDelay / 3);
+
     return { data };
 };
 
