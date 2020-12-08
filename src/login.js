@@ -26,8 +26,6 @@ const login = async (username, password, page) => {
         await page.type('input[name="password"]', password, { delay: 180 });
         await sleep(1000);
 
-        await page.click('button[type="submit"]');
-
         await Promise.allSettled([
             page.waitForResponse((response) => response.url().includes('/ajax'), { timeout: 5000 }),
             page.click('button[type="submit"]'),
