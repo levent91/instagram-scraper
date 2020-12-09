@@ -113,7 +113,7 @@ const scrapePosts = async ({ page, itemSpec, entryData, scrollingState, puppetee
 
     if (itemSpec.pageType === PAGE_TYPES.PLACE || itemSpec.pageType === PAGE_TYPES.HASHTAG) {
         try {
-            await page.waitForSelector('.EZdmt', { timeout: 15000 });
+            await page.waitForSelector('.EZdmt', { timeout: 25000 });
         } catch (e) {
             log(itemSpec, 'Place/location or hashtag page didn\'t load properly, trying again...', LOG_TYPES.ERROR);
             throw new Error('Place/location or hashtag page didn\'t load properly, trying again...');
