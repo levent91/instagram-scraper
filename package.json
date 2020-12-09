@@ -8,10 +8,9 @@
 		"@types/tough-cookie": "^4.0.0",
 		"@types/tunnel": "0.0.1",
 		"@types/underscore": "^1.10.24",
-		"apify": "^0.21.8",
+		"apify": "^0.21.10",
 		"got": "^9.6.0",
 		"request-promise-native": "^1.0.9",
-		"safe-eval": "^0.4.1",
 		"tough-cookie": "^3.0.1",
 		"tunnel": "0.0.6",
 		"underscore": "^1.11.0"

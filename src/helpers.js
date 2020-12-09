@@ -2,7 +2,6 @@ const Apify = require('apify');
 const tunnel = require('tunnel');
 const { CookieJar } = require('tough-cookie');
 const got = require('got');
-const safeEval = require('safe-eval');
 const { URLSearchParams } = require('url');
 const Puppeteer = require('puppeteer'); // eslint-disable-line no-unused-vars
 const errors = require('./errors');
@@ -243,7 +242,7 @@ function parseExtendOutputFunction(extendOutputFunction) {
     let parsedExtendOutputFunction;
     if (typeof extendOutputFunction === 'string' && extendOutputFunction.trim() !== '') {
         try {
-            parsedExtendOutputFunction = safeEval(extendOutputFunction);
+            parsedExtendOutputFunction = eval(extendOutputFunction);
         } catch (e) {
             throw new Error(`'extendOutputFunction' is not valid Javascript! Error: ${e}`);
         }
@@ -611,12 +610,33 @@ const loadXHR = async ({ request, page, url, proxyUrl, csrf_token }) => {
     return res;
 };
 
+/**
+ * @param {Puppeteer.Page} page
+ */
+const acceptCookiesDialog = async (page) => {
+    const acceptBtn = '[role="dialog"] button:first-of-type';
+
+    try {
+        await page.waitForSelector(acceptBtn, { timeout: 5000 });
+    } catch (e) {
+        return false;
+    }
+
+    await Promise.all([
+        page.waitForResponse(() => true),
+        page.click(acceptBtn),
+    ]);
+
+    return true;
+};
+
 module.exports = {
     getPageTypeFromUrl,
     getItemSpec,
     getCheckedVariable,
     log,
     finiteQuery,
+    acceptCookiesDialog,
     singleQuery,
     parseExtendOutputFunction,
     parseCaption,
