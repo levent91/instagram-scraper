@@ -172,7 +172,7 @@ The structure of each item in Instagram comments looks like this:
 ### Scraped Instagram profile
 The structure of each user profile looks like this:
 
-```yaml
+```json
 {
   "#debug": {
     "url": "https://www.instagram.com/avengers/"
@@ -211,7 +211,7 @@ The structure of each user profile looks like this:
       "videoDuration": 21.688,
       "videoViewCount": 77426
     },
-    # ...
+    // ...
   ],
   "postsCount": 274,
   "latestPosts": [
@@ -228,7 +228,7 @@ The structure of each user profile looks like this:
       "timestamp": "2019-05-01T18:44:12.000Z",
       "locationName": null
     },
-    ...
+    // ...
   ],
   "following": [],
   "followedBy": [],
@@ -238,7 +238,7 @@ The structure of each user profile looks like this:
 ### Scraped Instagram hashtag
 The structure of each hashtag detail looks like this:
 
-```yaml
+```json
 {
   "#debug": {
     "url": "https://www.instagram.com/explore/tags/endgame/"
@@ -263,7 +263,7 @@ The structure of each hashtag detail looks like this:
       "timestamp": "2019-05-02T11:14:55.000Z",
       "locationName": null
     },
-    # ...
+    // ...
   ],
   "latestPosts": [
     {
@@ -278,7 +278,7 @@ The structure of each hashtag detail looks like this:
       "timestamp": "2019-05-02T12:52:48.000Z",
       "locationName": null
     },
-    # ...
+    // ...
   ]
 }
 ```
@@ -286,7 +286,7 @@ The structure of each hashtag detail looks like this:
 ### Scraped Instagram place
 The structure of each place detail looks like this:
 
-```yaml
+```json
 {
   "#debug": {
     "url": "https://www.instagram.com/explore/locations/1017812091/namesti-miru/"
@@ -324,7 +324,7 @@ The structure of each place detail looks like this:
       "timestamp": "2019-05-01T09:45:20.000Z",
       "locationName": null
     },
-    # ...
+    // ...
   ],
   "latestPosts": [
     {
@@ -339,7 +339,7 @@ The structure of each place detail looks like this:
       "timestamp": "2019-05-02T09:46:45.000Z",
       "locationName": null
     },
-    # ...
+    // ...
   ]
 }
 ```
@@ -347,7 +347,7 @@ The structure of each place detail looks like this:
 ### Scraped Instagram post details
 The structure of each post detail looks like this:
 
-```yaml
+```json
 {
   "#debug": {
     "requestId": "YCyUc93vUGzK9eA",
@@ -370,7 +370,7 @@ The structure of each post detail looks like this:
       "ownerUsername": "mauricepaoletti",
       "text": "When is Tesla going to make boats? It was so nice to see clear water in Venice during the covid lockdown!"
     },
-    ...
+    // ...
   ],
   "dimensionsHeight": 1350,
   "dimensionsWidth": 1080,
@@ -391,7 +391,9 @@ The structure of each post detail looks like this:
     "https://instagram.fist4-1.fna.fbcdn.net/v/t51.2885-15/e35/57840129_308705413159630_8358160330083042716_n.jpg?_nc_ht=instagram.fist4-1.fna.fbcdn.net&_nc_cat=110&_nc_ohc=g7JIBg70oHMAX_QGayb&oh=1402875349a6d1cd8693f14f2b617fd6&oe=5F0DBA1F",
     "https://instagram.fist4-1.fna.fbcdn.net/v/t51.2885-15/e35/56744724_532173877312018_171181625703519178_n.jpg?_nc_ht=instagram.fist4-1.fna.fbcdn.net&_nc_cat=110&_nc_ohc=_zTxcKu_hyYAX9KtDax&oh=175f7e2fceb3f6b20f84e148baf4d9f9&oe=5F0C7535"
   ],
-  "childPosts": [...],
+  "childPosts": [
+      // ...
+  ],
   "locationSlug": "tesla-gigafactory-1",
   "isAdvertisement": false,
   "taggedUsers": [],
