@@ -77,8 +77,8 @@ async function main() {
     }
 
     const proxyConfiguration = await Apify.createProxyConfiguration({
-        proxyUrls: proxy.proxyUrls ? proxy.proxyUrls : undefined,
-        groups: proxy.proxyUrls ? undefined : ['RESIDENTIAL'],
+        proxyUrls: proxy && proxy.proxyUrls ? proxy.proxyUrls : undefined,
+        groups: proxy && proxy.proxyUrls ? undefined : ['RESIDENTIAL'],
     });
 
     if (Apify.isAtHome() && !proxyConfiguration) {
