@@ -161,5 +161,5 @@
             "editor": "javascript"
         }
     },
-    "required": ["proxy"]
+    "required": []
 }
