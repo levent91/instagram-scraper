@@ -78,13 +78,6 @@
             "description": "How many seconds it will wait every 100 posts/comments when scrolling. If you scrape more than 1000 items, it is important to slow down to not get blocked. The seconds are randomized a bit. If you get blocked anyway, try to increase this number.",
             "default": 15
         },
-        "proxy": {
-            "title": "Proxy configuration",
-            "type": "object",
-            "description": "<strong>Proxy is required to run this actor!</strong> Either use Apify proxy, or provide your own proxy servers.",
-            "prefill": { "useApifyProxy": true, "apifyProxyGroups": [] },
-            "editor": "proxy"
-        },
         "loginCookies": {
             "title": "Cookies",
             "type": "array",

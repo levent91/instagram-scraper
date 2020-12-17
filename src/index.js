@@ -76,7 +76,15 @@ async function main() {
         Apify.utils.log.warning('You are using Apify proxy but not residential group! It is very likely it will not work properly. Please contact support@apify.com for access to residential proxy.');
     }
 
-    const proxyConfiguration = await Apify.createProxyConfiguration(proxy);
+    const proxyConfiguration = await Apify.createProxyConfiguration({
+        proxyUrls: proxy.proxyUrls ? proxy.proxyUrls : undefined,
+        groups: proxy.proxyUrls ? undefined : ['RESIDENTIAL'],
+    });
+
+    if (Apify.isAtHome() && !proxyConfiguration) {
+        throw new Error("Can't use without proxies within the platform!");
+    }
+
     let urls;
     if (Array.isArray(directUrls) && directUrls.length > 0) {
         Apify.utils.log.warning('Search is disabled when Direct URLs are used');
