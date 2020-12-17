@@ -58,7 +58,7 @@ async function main() {
     }
 
     try {
-        if (Apify.isAtHome() && (!proxy || (!proxy.useApifyProxy && !proxy.proxyUrls))) throw errors.proxyIsRequired();
+        if (Apify.isAtHome() && (proxy && !proxy.proxyUrls && !proxy.apifyProxyGroups)) throw errors.proxyIsRequired();
         if (!resultsType) throw errors.typeIsRequired();
         if (!Object.values(SCRAPE_TYPES).includes(resultsType)) throw errors.unsupportedType(resultsType);
         if (SCRAPE_TYPES.COOKIES === resultsType && (!loginUsername || !loginPassword)) throw errors.credentialsRequired();
