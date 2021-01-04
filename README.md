@@ -1,7 +1,7 @@
 # Instagram Scraper
 
+- [Instagram blocking access - proxies required](#Instagram-blocking-access---proxies-required)
 - [Features](#Features)
-- [Instagram blocking and proxies](#Instagram-blocking-and-proxies)
 - [Input parameters](#Input-parameters)
 - [During the actor run](#During-the-actor-run)
 - [Using cookies to log in](#Using-cookies-to-log-in)
@@ -9,8 +9,13 @@
 - [Extend output function](#Extend-output-function)
 - [Changelog](#Changelog)
 
-## Features
+## Instagram blocking access - proxies required
+Instagram aggressively blocks access for scrapers and redirects to a login page. Currently, the only reliable solution to this problem is to use residential proxies. Datacenter proxies work only in rare cases.
 
+### Apify residential proxies
+The Apify platform [provides residential proxies](https://apify.com/proxy?pricing=residential-ip#pricing) if you have a paid subscription. These proxies are provided only to be run within actors on the Apify platform, not externally. If you are interested in using residential proxies for this scraper, contact `support@apify.com` via email or in-app chat to get the proxies enabled (a small test is possible).
+
+## Features
 Since Instagram has removed the option to load public data through its API, this actor should help replace this functionality. It allows you to scrape posts from a user's profile page, hashtag page, or place. When a link to an Instagram post is provided, it can scrape Instagram comments.
 
 The Instagram data scraper supports the following features:
@@ -26,12 +31,6 @@ The Instagram data scraper supports the following features:
 - Scrape likes - you can scrape likes from any post (if logged in)
 
 If you want to know more about how the Instagram Scraper works, I wrote a short introduction on the [Apify blog](https://medium.com/p/21d05506aeb3).
-
-## Instagram blocking and proxies
-In May 2020, Instagram significantly upgraded their anti-scraping protection, banning most datacenter proxies worldwide. Many previously working solutions were completely blocked by redirecting the pages to a login wall. Currently, the only reliable solution to this problem is to use residential proxies. Datacenter proxies may still work, but probably only less than 10% of the time.
-
-### Apify residential proxies
-The Apify platform [provides residential proxies](https://apify.com/proxy?pricing=residential-ip#pricing) for an extra fee. These proxies are only sold to be run with scrapers like this one, not externally. If you are interested in buying some residential GBs, just email support@apify.com and they will get back to you with more details.
 
 ### Custom proxies
 You can also use proxies from other providers in the custom proxies fields (`proxyUrls` in the JSON settings).

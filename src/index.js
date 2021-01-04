@@ -73,7 +73,7 @@ async function main() {
     }
 
     if (proxy && proxy.useApifyProxy && (!proxy.apifyProxyGroups || !proxy.apifyProxyGroups.includes('RESIDENTIAL'))) {
-        Apify.utils.log.warning('You are using Apify proxy but not residential group! It is very likely it will not work properly. Please contact support@apify.com for access to residential proxy.');
+        Apify.utils.log.warning('You are using Apify proxy but not the RESIDENTIAL group! It is very likely it will not work properly. Please contact support@apify.com for access to residential proxy.');
     }
 
     const proxyConfiguration = await Apify.createProxyConfiguration(proxy);
