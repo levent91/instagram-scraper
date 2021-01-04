@@ -199,8 +199,11 @@ async function main() {
                         break;
                 }
             } catch (e) {
-                Apify.utils.log.error(`Error happened while processing response: ${e.message}`);
-                console.log(e.stack);
+                const errMessage = e.message || e;
+                if (!errMessage.startsWith('Response body is unavailable for redirect responses')) {
+                    Apify.utils.log.error(`Error happened while processing response: ${e.message}`);
+                    console.log(e.stack);
+                }
             }
         });
 
