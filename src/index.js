@@ -31,7 +31,7 @@ async function main() {
         maxErrorCount,
         loginPassword,
         useStealth = false,
-        useChrome = false,
+        useChrome,
         includeHasStories = false,
         cookiesPerConcurrency = 1,
     } = input;
