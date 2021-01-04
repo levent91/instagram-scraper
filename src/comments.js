@@ -100,7 +100,16 @@ async function handleCommentsGraphQLResponse({ page, response, scrollingState, l
     // Skip queries for other stuff then posts
     if (!responseUrl.includes(checkedVariable) || !responseUrl.includes('%22first%22')) return;
 
-    const data = await response.json();
+    let data;
+    const status = response.status();
+    if (status === 200) {
+        data = await response.json();
+    } else {
+        // This error is also handled elsewhere and from here it is useless to log it
+        return
+    }
+
+
     const timeline = getCommentsFromGraphQL({ data: data.data });
 
     if (!initData[page.itemSpec.id]) {
