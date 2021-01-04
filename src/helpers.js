@@ -476,8 +476,8 @@ const loadMore = async ({ itemSpec, page, retry = 0, type }) => {
             }
 
             if (status !== 200) {
-                // usually 302 redirecting to login
-                throw new Error(`Got error status while scrolling: ${status}`);
+                // usually 302 redirecting to login, throwing string to remove the long stack trace
+                throw `Got error status while scrolling: ${status}. Retrying...`;
             }
 
             let json;
@@ -492,7 +492,8 @@ const loadMore = async ({ itemSpec, page, retry = 0, type }) => {
             if (json) data = json.data;
         } catch (error) {
             // Apify.utils.log.error(error);
-            if (error.message.includes('Got error')) {
+            const errorMessage = error.message || error;
+            if (errorMessage.includes('Got error')) {
                 throw error;
             } else {
                 log(itemSpec, 'Non fatal error occured while scrolling:', LOG_TYPES.WARNING);

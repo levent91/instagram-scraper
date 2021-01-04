@@ -81,7 +81,7 @@
         "proxy": {
             "title": "Proxy configuration",
             "type": "object",
-            "description": "<strong>Proxy is required to run this actor!</strong> Either use Apify RESIDENTIAL proxy, or provide your own proxy servers.",
+            "description": "<strong>Proxy is required to run this actor!</strong> Either use Apify RESIDENTIAL proxy, or provide your own proxy servers. Non-RESIDENTIAL proxy groups usually don't work.",
             "prefill": { "useApifyProxy": true, "apifyProxyGroups": ["RESIDENTIAL"] },
             "editor": "proxy"
         },
