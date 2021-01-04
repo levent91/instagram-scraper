@@ -31,6 +31,7 @@ async function main() {
         maxErrorCount,
         loginPassword,
         useStealth = false,
+        useChrome = false,
         includeHasStories = false,
         cookiesPerConcurrency = 1,
     } = input;
@@ -372,7 +373,7 @@ async function main() {
         const browser = await Apify.launchPuppeteer({
             ...options,
             stealth: useStealth,
-            useChrome: Apify.isAtHome(),
+            useChrome: typeof useChrome === 'boolean' ? useChrome : Apify.isAtHome(),
             ignoreHTTPSErrors: true,
             args: [
                 '--enable-features=NetworkService',
