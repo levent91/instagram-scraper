@@ -243,7 +243,8 @@ async function main() {
             } catch (e) {
                 // this usually means that the proxy 100% failing and will keep trying until failing all retries
                 session.retire();
-                await puppeteerPool.retire(page.browser());
+                // TODO: Bug in SDK puppeteerPool === undefined. Also this should not be used when session.retire works so remove later
+                // await puppeteerPool.retire(page.browser());
                 throw new Error('Page isn\'t loading, trying another proxy');
             }
         })();
@@ -256,7 +257,9 @@ async function main() {
                     // choose other cookie from store or exit if no other available
                     loginCookiesStore.markAsBad(browser.process().pid);
                     if (loginCookiesStore.cookiesCount() > 0) {
-                        await puppeteerPool.retire(browser);
+                        session.retire();
+                        // TODO: Bug in SDK puppeteerPool === undefined. Also this should not be used when session.retire works so remove later
+                        // await puppeteerPool.retire(browser);
                         throw new Error('Failed to log in using cookies, they are probably no longer usable and you need to set new ones.');
                     } else {
                         Apify.utils.log.error('No login cookies available.');
@@ -303,7 +306,9 @@ async function main() {
         const { entry_data: entryData } = data;
 
         if (entryData.LoginAndSignupPage) {
-            await puppeteerPool.retire(page.browser());
+            session.retire();
+            // TODO: Bug in SDK puppeteerPool === undefined. Also this should not be used when session.retire works so remove later
+            // await puppeteerPool.retire(page.browser());
             throw errors.redirectedToLogin();
         }
 
@@ -360,7 +365,8 @@ async function main() {
             } catch (e) {
                 Apify.utils.log.debug('Retiring browser', { url: request.url });
                 session.retire();
-                await puppeteerPool.retire(page.browser());
+                // TODO: Bug in SDK puppeteerPool === undefined. Also this should not be used when session.retire works so remove later
+                // await puppeteerPool.retire(page.browser());
                 throw e;
             }
         }

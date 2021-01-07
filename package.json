@@ -8,7 +8,7 @@
 		"@types/tough-cookie": "^4.0.0",
 		"@types/tunnel": "0.0.1",
 		"@types/underscore": "^1.10.24",
-		"apify": "^0.22.2",
+		"apify": "0.21.11",
 		"got": "^9.6.0",
 		"request-promise-native": "^1.0.9",
 		"tough-cookie": "^3.0.1",

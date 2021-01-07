@@ -173,6 +173,7 @@ const scrapePosts = async ({ page, itemSpec, entryData, scrollingState, puppetee
     } else {
         // We have to forcefully close the browser here because it hangs sometimes for some listeners reasons
         // Because we always have max one page per browser, this is fine
+        console.log(`Puppeteer retire posts.js line 176`);
         await puppeteerPool.retire(page.browser());
     }
 };
