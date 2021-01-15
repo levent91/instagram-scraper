@@ -1,12 +1,12 @@
-/* eslint-disable no-underscore-dangle */
 const Apify = require('apify');
-const _ = require('underscore');
+const Puppeteer = require('puppeteer'); // eslint-disable-line no-unused-vars
 const { log, parseCaption, loadXHR } = require('./helpers');
 const { PAGE_TYPES } = require('./consts');
 const { getPostLikes } = require('./likes');
 const { getProfileFollowedBy } = require('./followed_by');
 const { getProfileFollowing } = require('./following');
 const { xhrNotLoaded } = require('./errors');
+
 const { sleep } = Apify.utils;
 
 // Formats IGTV Video Post edge item into nicely formated output item
@@ -31,7 +31,7 @@ const formatIGTVVideo = (edge) => {
 // Formats list of display recources into URLs
 const formatDisplayResources = (resources) => {
     if (!resources) return [];
-    return resources.map(resource => resource.node.display_url);
+    return resources.map((resource) => resource.node.display_url);
 };
 
 // Format Post Edge item into cleaner output
@@ -49,7 +49,7 @@ const formatSinglePost = (node) => {
         mentions,
         url: `https://www.instagram.com/p/${node.shortcode}`,
         commentsCount: comments ? comments.count : null,
-        latestComments: comments && comments.edges ? comments.edges.map(edge => ({
+        latestComments: comments && comments.edges ? comments.edges.map((edge) => ({
             ownerUsername: edge.node.owner ? edge.node.owner.username : '',
             text: edge.node.text,
         })).reverse() : [],
@@ -145,8 +145,8 @@ const formatPlaceOutput = (request, data) => ({
     ...formatJSONAddress(data.address_json),
     profilePicUrl: data.profile_pic_url,
     postsCount: data.edge_location_to_media.count,
-    topPosts: data.edge_location_to_top_posts ? data.edge_location_to_top_posts.edges.map(edge => edge.node).map(formatSinglePost) : [],
-    latestPosts: data.edge_location_to_media ? data.edge_location_to_media.edges.map(edge => edge.node).map(formatSinglePost) : [],
+    topPosts: data.edge_location_to_top_posts ? data.edge_location_to_top_posts.edges.map((edge) => edge.node).map(formatSinglePost) : [],
+    latestPosts: data.edge_location_to_media ? data.edge_location_to_media.edges.map((edge) => edge.node).map(formatSinglePost) : [],
 });
 
 // Formats data from window._shared_data.entry_data.TagPage[0].graphql.hashtag to nicer output
@@ -158,8 +158,8 @@ const formatHashtagOutput = (request, data) => ({
     topPostsOnly: data.is_top_media_only,
     profilePicUrl: data.profile_pic_url,
     postsCount: data.edge_hashtag_to_media.count,
-    topPosts: data.edge_hashtag_to_top_posts ? data.edge_hashtag_to_top_posts.edges.map(edge => edge.node).map(formatSinglePost) : [],
-    latestPosts: data.edge_hashtag_to_media ? data.edge_hashtag_to_media.edges.map(edge => edge.node).map(formatSinglePost) : [],
+    topPosts: data.edge_hashtag_to_top_posts ? data.edge_hashtag_to_top_posts.edges.map((edge) => edge.node).map(formatSinglePost) : [],
+    latestPosts: data.edge_hashtag_to_media ? data.edge_hashtag_to_media.edges.map((edge) => edge.node).map(formatSinglePost) : [],
 });
 
 // Formats data from window._shared_data.entry_data.PostPage[0].graphql.shortcode_media to nicer output
@@ -175,66 +175,64 @@ const formatPostOutput = async (input, request, data, page, itemSpec) => {
         childPosts: data.edge_sidecar_to_children ? data.edge_sidecar_to_children.edges.map((child) => formatSinglePost(child.node)) : null,
         locationSlug: data.location ? data.location.slug : null,
         isAdvertisement: typeof data.is_ad !== 'undefined' ? data.is_ad : null,
-        taggedUsers: data.edge_media_to_tagged_user ? data.edge_media_to_tagged_user.edges.map(edge => edge.node.user.username) : [],
+        taggedUsers: data.edge_media_to_tagged_user ? data.edge_media_to_tagged_user.edges.map((edge) => edge.node.user.username) : [],
         likedBy,
-    }
+    };
 };
 
 // Finds correct variable in window._shared_data.entry_data based on pageType
-// Finds correct variable in window._shared_data.entry_data based on pageType
-const getOutputFromEntryData = async ({ input, itemSpec, request, entryData, page, proxy, userResult }) => {
+const getOutputFromEntryData = async ({ input, itemSpec, request, entryData, page }) => {
     switch (itemSpec.pageType) {
         case PAGE_TYPES.PLACE:
-            return formatPlaceOutput(request, entryData.LocationsPage[0].graphql.location, page, itemSpec, userResult);
+            return formatPlaceOutput(request, entryData.LocationsPage[0].graphql.location);
         case PAGE_TYPES.PROFILE:
-            return formatProfileOutput(input, request, entryData.ProfilePage[0].graphql.user, page, itemSpec, userResult);
+            return formatProfileOutput(input, request, entryData.ProfilePage[0].graphql.user, page, itemSpec);
         case PAGE_TYPES.HASHTAG:
-            return formatHashtagOutput(request, entryData.TagPage[0].graphql.hashtag, page, itemSpec, userResult);
+            return formatHashtagOutput(request, entryData.TagPage[0].graphql.hashtag);
         case PAGE_TYPES.POST:
-            return await formatPostOutput(input, request, entryData.PostPage[0].graphql.shortcode_media, page, itemSpec, userResult);
+            return formatPostOutput(input, request, entryData.PostPage[0].graphql.shortcode_media, page, itemSpec);
         default:
             throw new Error('Not supported');
     }
 };
 
 // Takes correct variable from window object and formats it into proper output
-const scrapeDetails = async ({ input, request, itemSpec, data, page, proxy, userResult, includeHasStories, proxyUrl }) => {
+const scrapeDetails = async ({ input, request, itemSpec, data, page, proxy, includeHasStories, proxyUrl }) => {
     const entryData = data.entry_data;
     let hasPublicStories;
-    if (includeHasStories)
-        hasPublicStories = await loadHasPublicStories(request, page, data, proxyUrl);
+    if (includeHasStories) hasPublicStories = await loadHasPublicStories(request, page, data, proxyUrl);
 
-    const output = await getOutputFromEntryData({ input, itemSpec, request, entryData, page, proxy, userResult });
-    _.extend(output, userResult);
-    if (includeHasStories)
-        output.hasPublicStory = hasPublicStories;
+    const output = await getOutputFromEntryData({ input, itemSpec, request, entryData, page });
+
+    if (includeHasStories) output.hasPublicStory = hasPublicStories;
+
     await Apify.pushData(output);
+
     log(itemSpec, 'Page details saved, task finished');
 };
 
 /**
  * Load has_public_story from separate XHR request
  * @param {Request} request
- * @param {PuppeteerPage} page
+ * @param {Puppeteer.Page} page
  * @param {Object} data
  * @param {String} proxyUrl
  * @returns {Promise<*>}
  */
 const loadHasPublicStories = async (request, page, data, proxyUrl) => {
-    const csrf_token = data.config.csrf_token;
+    const { csrf_token } = data.config;
     if (!data.entry_data.ProfilePage) throw 'Not a profile page';
     const userId = data.entry_data.ProfilePage[0].graphql.user.id;
     const url = `https://www.instagram.com/graphql/query/?query_hash=d4d88dc1500312af6f937f7b804c68c3&variables=%7B%22user_id%22%3A%22${userId}%22%2C%22include_chaining%22%3Afalse%2C%22include_reel%22%3Afalse%2C%22include_suggested_users%22%3Afalse%2C%22include_logged_out_extras%22%3Atrue%2C%22include_highlight_reels%22%3Afalse%2C%22include_live_status%22%3Atrue%7D`;
 
-    const response = await loadXHR({ request, page, url, csrf_token, proxyUrl })
+    const response = await loadXHR({ request, page, url, csrf_token, proxyUrl });
 
     if (response.statusCode === 200) {
         const responseData = JSON.parse(response.body);
         return responseData.data.user.has_public_story;
-    } else {
-        throw 'XHR for hasPublicStory not loaded correctly.'
     }
-}
+    throw 'XHR for hasPublicStory not loaded correctly.';
+};
 
 module.exports = {
     scrapeDetails,

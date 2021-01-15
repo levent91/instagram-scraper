@@ -36,22 +36,23 @@ const getCommentsFromGraphQL = ({ data }) => {
  *   request: Apify.Request,
  *   itemSpec: any,
  *   entryData: any,
+ *   additionalData: any,
  *   scrollingState: any,
  *   puppeteerPool: Apify.PuppeteerPool
  * }} params
  */
-const scrapeComments = async ({ page, itemSpec, entryData, scrollingState, puppeteerPool }) => {
+const scrapeComments = async ({ page, itemSpec, entryData, additionalData, scrollingState, puppeteerPool }) => {
     // Check that current page is of a type which has comments
     if (itemSpec.pageType !== PAGE_TYPES.POST) throw errors.notPostPage();
 
     // Check if the page loaded properly
     try {
-        await page.waitForSelector('.EtaWk', { timeout: 5000 });
+        await page.waitForSelector('.EtaWk', { timeout: 15000 });
     } catch (e) {
         throw new Error(`Post page didn't load properly, opening again`);
     }
 
-    const timeline = getCommentsFromGraphQL({ data: entryData.PostPage[0].graphql });
+    const timeline = getCommentsFromGraphQL({ data: entryData.PostPage[0].graphql || additionalData.graphql });
     initData[itemSpec.id] = timeline;
 
     // We want to push as soon as we have the data. We have to persist comment ids state so we don;t loose those on migration
@@ -70,7 +71,7 @@ const scrapeComments = async ({ page, itemSpec, entryData, scrollingState, puppe
         while (!initData[itemSpec.id]) await sleep(100);
     }
 
-    await sleep(500);
+    await sleep(1500);
 
     const willContinueScroll = initData[itemSpec.id].hasNextPage && Object.keys(scrollingState[itemSpec.id].ids).length < itemSpec.limit;
     if (willContinueScroll) {
@@ -106,9 +107,8 @@ async function handleCommentsGraphQLResponse({ page, response, scrollingState, l
         data = await response.json();
     } else {
         // This error is also handled elsewhere and from here it is useless to log it
-        return
+        return;
     }
-
 
     const timeline = getCommentsFromGraphQL({ data: data.data });
 

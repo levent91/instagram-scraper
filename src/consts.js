@@ -52,7 +52,6 @@ module.exports = {
     ],
     ABORT_RESOURCE_URL_INCLUDES: [
         '/map_tile.php',
-        '/connect.facebook.net',
         '/logging_client_events',
         '/falco',
         '/bz',

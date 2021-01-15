@@ -1,4 +1,6 @@
 const Apify = require('apify');
+const Puppeteer = require('puppeteer'); // eslint-disable-line no-unused-vars
+
 const { utils: { requestAsBrowser } } = Apify;
 const { storiesNotLoaded } = require('./errors');
 const { HEADERS } = require('./consts');
@@ -38,10 +40,12 @@ async function handleStoriesGraphQLResponse(response) {
 
 /**
  * Make XHR request to get stories data and store them to dataset
- * @param {Request} request - request object of main page
- * @param {PuppeteerPage} page - page object
- * @param {Object} data - data object loaded from init page
- * @param {String} proxyUrl - proxy url
+ * @param {{
+ *   request: Apify.Request,
+ *   page: Puppeteer.Page,
+ *   data: any,
+ *   proxyUrl: string
+ * }} params
  * @returns {Promise<void>}
  */
 const scrapeStories = async ({ request, page, data, proxyUrl }) => {
@@ -51,7 +55,7 @@ const scrapeStories = async ({ request, page, data, proxyUrl }) => {
     }
     const reelId = data.entry_data.StoriesPage[0].user.id;
     const url = `https://www.instagram.com/graphql/query/?query_hash=c9c56db64beb4c9dea2d17740d0259d9&variables=%7B%22reel_ids%22%3A%5B%22${reelId}%22%5D%2C%22tag_names%22%3A%5B%5D%2C%22location_ids%22%3A%5B%5D%2C%22highlight_reel_ids%22%3A%5B%5D%2C%22precomposed_overlay%22%3Afalse%2C%22show_story_viewer_list%22%3Atrue%2C%22story_viewer_fetch_count%22%3A50%2C%22story_viewer_cursor%22%3A%22%22%2C%22stories_video_dash_manifest%22%3Afalse%7D`;
-    const csrf_token = data.config.csrf_token;
+    const { csrf_token } = data.config;
 
     const response = await loadXHR({ request, page, url, csrf_token, proxyUrl });
 
@@ -60,7 +64,7 @@ const scrapeStories = async ({ request, page, data, proxyUrl }) => {
     } else {
         throw storiesNotLoaded(reelId);
     }
-}
+};
 
 module.exports = {
     scrapeStories,

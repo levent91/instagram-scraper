@@ -6,12 +6,11 @@ const { scrapeComments, handleCommentsGraphQLResponse } = require('./comments');
 const { scrapeStories } = require('./stories');
 const { scrapeDetails } = require('./details');
 const { searchUrls } = require('./search');
-const { getItemSpec, parseExtendOutputFunction, getPageTypeFromUrl } = require('./helpers');
-const { GRAPHQL_ENDPOINT, ABORT_RESOURCE_TYPES, ABORT_RESOURCE_URL_INCLUDES, ABORT_RESOURCE_URL_DOWNLOAD_JS, SCRAPE_TYPES, PAGE_TYPES } = require('./consts');
+const { getItemSpec, getPageTypeFromUrl, extendFunction } = require('./helpers');
+const { GRAPHQL_ENDPOINT, ABORT_RESOURCE_TYPES, ABORT_RESOURCE_URL_INCLUDES, SCRAPE_TYPES } = require('./consts');
 const { initQueryIds } = require('./query_ids');
 const errors = require('./errors');
 const { login } = require('./login');
-const { LoginCookiesStore } = require('./cookies');
 
 const { sleep } = Apify.utils;
 
@@ -36,8 +35,6 @@ async function main() {
         cookiesPerConcurrency = 1,
     } = input;
 
-    const extendOutputFunction = parseExtendOutputFunction(input.extendOutputFunction);
-
     if (proxy && proxy.proxyUrls && proxy.proxyUrls.length === 0) delete proxy.proxyUrls;
 
     await initQueryIds();
@@ -51,11 +48,12 @@ async function main() {
     Apify.events.on('persistState', persistState);
 
     let maxConcurrency = input.maxConcurrency || 1000;
+    let loginCount = 0;
 
-    const loginCookiesStore = new LoginCookiesStore(loginCookies, cookiesPerConcurrency, maxErrorCount);
-    if (loginCookiesStore.usingLogin()) {
-        maxConcurrency = loginCookiesStore.concurrency();
-        Apify.utils.log.warning(`Cookies were used, setting maxConcurrency to ${maxConcurrency}. Count of available cookies: ${loginCookiesStore.cookiesCount()}!`);
+    if (loginCookies && loginCookies.length > 0) {
+        maxConcurrency = cookiesPerConcurrency;
+        loginCount = Array.isArray(loginCookies[0]) ? loginCookies.length : 1;
+        Apify.utils.log.warning(`Cookies were used, setting maxConcurrency to ${maxConcurrency}. Count of available cookies: ${loginCount}!`);
     }
 
     try {
@@ -63,6 +61,9 @@ async function main() {
         if (!resultsType) throw errors.typeIsRequired();
         if (!Object.values(SCRAPE_TYPES).includes(resultsType)) throw errors.unsupportedType(resultsType);
         if (SCRAPE_TYPES.COOKIES === resultsType && (!loginUsername || !loginPassword)) throw errors.credentialsRequired();
+        if (loginUsername && loginPassword && SCRAPE_TYPES.COOKIES !== resultsType) {
+            Apify.utils.log.warning('You provided username and password but will be ignored');
+        }
     } catch (error) {
         Apify.utils.log.info('--  --  --  --  --');
         Apify.utils.log.info(' ');
@@ -102,27 +103,68 @@ async function main() {
         process.exit(0);
     }
 
+    const requestQueue = await Apify.openRequestQueue();
+
     const requestList = await Apify.openRequestList('request-list', requestListSources);
     // keeps JS and CSS in a memory cache, since request interception disables cache
     const memoryCache = new Map();
 
+    // TODO: Move everything here
+    const extendOutputFunction = await extendFunction({
+        output: async (data) => {
+            await Apify.pushData(data);
+        },
+        input,
+        key: 'extendOutputFunction',
+        helpers: {
+
+        },
+    });
+
+    const extendScraperFunction = await extendFunction({
+        output: async () => {}, // no-op
+        input,
+        key: 'extendScraperFunction',
+        helpers: {
+            requestQueue,
+        },
+    });
+
     /**
      * @type {Apify.PuppeteerGoto}
      */
-    const gotoFunction = async ({ request, page, puppeteerPool, autoscaledPool, session }) => {
-        loginCookiesStore.setPuppeteerPool(puppeteerPool); // get puppeteerPool instance
-        loginCookiesStore.setAutoscaledPool(autoscaledPool); // get autoscaledPool instance
+    const gotoFunction = async ({ request, page, puppeteerPool, session }) => {
         await page.setBypassCSP(true);
-        if (loginUsername && loginPassword) {
+
+        await page.setViewport({
+            ..._.sample([{
+                width: 1920,
+                height: 1080,
+            }, {
+                width: 1366,
+                height: 768,
+            }, {
+                width: 1440,
+                height: 900,
+            }]),
+            isMobile: false,
+            deviceScaleFactor: _.sample([1, 2, 4]),
+        });
+
+        if (loginUsername && loginPassword && resultsType === SCRAPE_TYPES.COOKIES) {
             await login(loginUsername, loginPassword, page);
             const cookies = await page.cookies();
-            if (SCRAPE_TYPES.COOKIES === resultsType) {
-                await Apify.pushData(cookies);
-                // for local usage to get cookies in one array
-                // const keyval = await Apify.openKeyValueStore();
-                // await keyval.setValue('cookies', cookies);
-                return null;
-            }
+
+            await Apify.setValue('OUTPUT', cookies);
+
+            Apify.utils.log.info('\n-----------\n\nCookies saved, check OUTPUT in the key value store\n\n-----------\n');
+            return null;
+        }
+
+        if (loginCount > 0) {
+            const cookies = session.getPuppeteerCookies('https://instagram.com');
+            // page.cookies / getPuppeteerCookies have different settings for domain
+            await page.setCookie(...cookies.map((s) => ({ ...s, domain: '.instagram.com' })));
         }
 
         await Apify.utils.puppeteer.blockRequests(page, {
@@ -242,37 +284,50 @@ async function main() {
                 });
             } catch (e) {
                 // this usually means that the proxy 100% failing and will keep trying until failing all retries
-                session.retire();
-                // TODO: Bug in SDK puppeteerPool === undefined. Also this should not be used when session.retire works so remove later
-                // await puppeteerPool.retire(page.browser());
+                if (loginCount > 0) {
+                    session.markBad();
+                } else {
+                    session.retire();
+                }
+                await puppeteerPool.retire(page.browser());
                 throw new Error('Page isn\'t loading, trying another proxy');
             }
         })();
 
-        if (loginCookiesStore.usingLogin()) {
+        if (loginCount > 0) {
             try {
-                const browser = page.browser();
+                await page.waitForFunction(() => {
+                    return !!(window._sharedData
+                        && window._sharedData.config
+                        && window._sharedData.config.viewerId);
+                }, { timeout: 15000 });
+
                 const viewerId = await page.evaluate(() => window._sharedData.config.viewerId);
+
                 if (!viewerId) {
                     // choose other cookie from store or exit if no other available
-                    loginCookiesStore.markAsBad(browser.process().pid);
-                    if (loginCookiesStore.cookiesCount() > 0) {
-                        session.retire();
-                        // TODO: Bug in SDK puppeteerPool === undefined. Also this should not be used when session.retire works so remove later
-                        // await puppeteerPool.retire(browser);
+                    session.markBad();
+
+                    if (!loginSessions.find((s) => s.isUsable())) {
+                        await puppeteerPool.retire(page.browser());
                         throw new Error('Failed to log in using cookies, they are probably no longer usable and you need to set new ones.');
                     } else {
                         Apify.utils.log.error('No login cookies available.');
                         process.exit(1);
                     }
                 } else {
-                    loginCookiesStore.markAsGood(browser.process().pid);
+                    session.markGood();
                 }
             } catch (loginError) {
                 Apify.utils.log.error(loginError);
                 throw new Error('Page didn\'t load properly with login, retrying...');
             }
         }
+
+        if (!response) {
+            throw new Error('Response is invalid');
+        }
+
         return response;
     };
 
@@ -297,40 +352,51 @@ async function main() {
             Apify.utils.log.error(`Page "${request.url}" is private and cannot be displayed.`);
             return;
         }
+
         // eslint-disable-next-line no-underscore-dangle
         await page.waitForFunction(() => (!window.__initialData.pending && window.__initialData && window.__initialData.data), { timeout: 20000 });
         // eslint-disable-next-line no-underscore-dangle
         const { pending, data } = await page.evaluate(() => window.__initialData);
+        const additionalData = await page.evaluate(() => {
+            try {
+                return Object.values(window.__additionalData)[0].data;
+            } catch (e) {
+                return {};
+            }
+        });
+
         if (pending) throw new Error('Page took too long to load initial data, trying again.');
         if (!data || !data.entry_data) throw new Error('Page does not contain initial data, trying again.');
+
         const { entry_data: entryData } = data;
 
         if (entryData.LoginAndSignupPage) {
-            session.retire();
+            if (loginCount > 0) {
+                session.markBad();
+            } else {
+                session.retire();
+            }
             // TODO: Bug in SDK puppeteerPool === undefined. Also this should not be used when session.retire works so remove later
-            // await puppeteerPool.retire(page.browser());
+            await puppeteerPool.retire(page.browser());
             throw errors.redirectedToLogin();
         }
 
-        const itemSpec = getItemSpec(entryData);
+        const itemSpec = getItemSpec(entryData, additionalData);
         // Passing the limit around
         itemSpec.limit = resultsLimit || 999999;
         itemSpec.scrapePostsUntilDate = scrapePostsUntilDate;
         itemSpec.input = input;
         itemSpec.scrollWaitSecs = scrollWaitSecs;
 
-        let userResult = {};
-        if (extendOutputFunction) {
-            userResult = await page.evaluate((functionStr) => {
-                // eslint-disable-next-line no-eval
-                const f = eval(functionStr);
-                return f();
-            }, input.extendOutputFunction);
-        }
+        // interact with page
+        await extendScraperFunction(undefined, {
+            page,
+            request,
+            itemSpec,
+        });
 
         if (request.userData.label === 'postDetail') {
-            const result = scrapePost(request, itemSpec, entryData);
-            _.extend(result, userResult);
+            const result = scrapePost(request, itemSpec, entryData, additionalData);
 
             await Apify.pushData(result);
         } else {
@@ -341,7 +407,7 @@ async function main() {
                         await scrapePosts({ page, request, itemSpec, entryData, input, scrollingState, puppeteerPool });
                         break;
                     case SCRAPE_TYPES.COMMENTS:
-                        await scrapeComments({ page, itemSpec, entryData, scrollingState, puppeteerPool });
+                        await scrapeComments({ page, request, additionalData, itemSpec, entryData, scrollingState, puppeteerPool });
                         break;
                     case SCRAPE_TYPES.DETAILS:
                         await scrapeDetails({
@@ -351,7 +417,6 @@ async function main() {
                             data,
                             page,
                             proxy,
-                            userResult,
                             includeHasStories,
                             proxyUrl,
                         });
@@ -364,9 +429,13 @@ async function main() {
                 }
             } catch (e) {
                 Apify.utils.log.debug('Retiring browser', { url: request.url });
-                session.retire();
+                if (loginCount > 0) {
+                    session.markBad();
+                } else {
+                    session.retire();
+                }
                 // TODO: Bug in SDK puppeteerPool === undefined. Also this should not be used when session.retire works so remove later
-                // await puppeteerPool.retire(page.browser());
+                await puppeteerPool.retire(page.browser());
                 throw e;
             }
         }
@@ -376,7 +445,7 @@ async function main() {
      * @type {Apify.LaunchPuppeteerFunction}
      */
     const launchPuppeteerFunction = async (options) => {
-        const browser = await Apify.launchPuppeteer({
+        return Apify.launchPuppeteer({
             ...options,
             stealth: useStealth,
             useChrome: typeof useChrome === 'boolean' ? useChrome : Apify.isAtHome(),
@@ -388,17 +457,28 @@ async function main() {
             ],
             devtools: !Apify.isAtHome(),
         });
-
-        const cookies = loginCookiesStore.randomCookie(browser.process().pid);
-        if (cookies && cookies.length) {
-            const page = await browser.newPage();
-            await page.setCookie(...cookies);
-        }
-
-        return browser;
     };
 
-    const requestQueue = await Apify.openRequestQueue();
+    /**
+     * @type {Apify.Session[]}
+     */
+    const loginSessions = [];
+
+    /**
+     * @param {Parameters<Apify.Session['setPuppeteerCookies']>[0]} cookies
+     * @param {Apify.SessionPool} sessionPool
+     */
+    const setLoginSession = (cookies, sessionPool) => {
+        const newSession = new Apify.Session({
+            sessionPool,
+            maxErrorScore: maxErrorCount,
+            maxUsageCount: 50000,
+        });
+
+        newSession.setPuppeteerCookies(cookies, 'https://instagram.com');
+
+        loginSessions.push(newSession);
+    };
 
     const crawler = new Apify.PuppeteerCrawler({
         requestList,
@@ -409,13 +489,35 @@ async function main() {
             useIncognitoPages: true,
             maxOpenPagesPerInstance: 1,
         },
+        sessionPoolOptions: {
+            // eslint-disable-next-line no-nested-ternary
+            maxPoolSize: loginCount > 0 ? loginCount : (resultsType === SCRAPE_TYPES.COOKIES ? 1 : undefined),
+            createSessionFunction(sessionPool) {
+                if (loginCount > 0) {
+                    if (!loginSessions.length) {
+                        if (Array.isArray(loginCookies[0])) {
+                            for (const cookies of loginCookies) {
+                                setLoginSession(cookies, sessionPool);
+                            }
+                        } else {
+                            setLoginSession(loginCookies, sessionPool);
+                        }
+                    }
+
+                    return loginSessions.find((s) => s.isUsable());
+                }
+
+                return new Apify.Session({
+                    sessionPool,
+                });
+            },
+        },
         useSessionPool: true,
         proxyConfiguration: proxyConfiguration || undefined,
         launchPuppeteerFunction,
         maxConcurrency,
         handlePageTimeoutSecs: 300 * 60, // Ex: 5 hours to crawl thousands of comments
         handlePageFunction,
-        // If request failed 4 times then this function is executed.
         handleFailedRequestFunction: async ({ request }) => {
             Apify.utils.log.error(`${request.url}: Request ${request.url} failed ${maxRequestRetries + 1} times, not retrying any more`);
             await Apify.pushData({
@@ -426,7 +528,14 @@ async function main() {
     });
 
     await crawler.run();
-    if (loginCookiesStore.invalidCookies().length > 0) Apify.utils.log.warning(`Invalid cookies: ${loginCookiesStore.invalidCookies().join('; ')}`);
+
+    if (loginSessions.length > 0) {
+        const invalid = loginSessions.reduce((count, session) => (count + (!session.isUsable() ? 1 : 0)), 0);
+
+        if (invalid) {
+            Apify.utils.log.warning(`Invalid cookies count: ${invalid}`);
+        }
+    }
 }
 
 module.exports = main;
