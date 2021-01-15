@@ -58,8 +58,14 @@ const getPostsFromEntryData = (pageType, data) => {
     return getPostsFromGraphQL({ pageType, data: pageData[0].graphql });
 };
 
-const scrapePost = (request, itemSpec, entryData) => {
-    const item = entryData.PostPage[0].graphql.shortcode_media;
+const scrapePost = (request, itemSpec, entryData, additionalData) => {
+    const item = (() => {
+        try {
+            return entryData.PostPage[0].graphql.shortcode_media;
+        } catch (e) {
+            return additionalData.data.graphql.shortcode_media;
+        }
+    })();
 
     return {
         '#debug': {

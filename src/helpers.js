@@ -2,13 +2,25 @@ const Apify = require('apify');
 const tunnel = require('tunnel');
 const { CookieJar } = require('tough-cookie');
 const got = require('got');
+const vm = require('vm');
 const { URLSearchParams } = require('url');
 const Puppeteer = require('puppeteer'); // eslint-disable-line no-unused-vars
+const get = require('lodash.get');
 const errors = require('./errors');
 const { expandOwnerDetails } = require('./user-details');
 const { PAGE_TYPES, GRAPHQL_ENDPOINT, LOG_TYPES, PAGE_TYPE_URL_REGEXES, HEADERS } = require('./consts');
 
 const { sleep, requestAsBrowser } = Apify.utils;
+
+/**
+ * @param {Array<{ obj: any, paths: string[] }>} objs
+ * @param {any} [fallback]
+ */
+const coalesce = (objs, fallback = {}) => {
+    return objs.reduce((out, { obj, paths }) => {
+        return out || paths.reduce((found, path) => (typeof found !== 'undefined' ? found : get(obj, path)), undefined);
+    }, undefined) || fallback;
+};
 
 const getPageTypeFromUrl = (url) => {
     for (const [pageType, regex] of Object.entries(PAGE_TYPE_URL_REGEXES)) {
@@ -21,10 +33,14 @@ const getPageTypeFromUrl = (url) => {
 /**
  * Takes object from _sharedData.entry_data and parses it into simpler object
  * @param {Object} entryData
+ * @param {any} additionalData
  */
-const getItemSpec = (entryData) => {
+const getItemSpec = (entryData, additionalData) => {
     if (entryData.LocationsPage) {
-        const itemData = entryData.LocationsPage[0].graphql.location;
+        const itemData = coalesce([
+            { obj: entryData, paths: ['LocationsPage[0].graphql.location'] },
+            { obj: additionalData, paths: ['graphql.location'] },
+        ]);
         return {
             pageType: PAGE_TYPES.PLACE,
             id: itemData.slug,
@@ -35,7 +51,10 @@ const getItemSpec = (entryData) => {
     }
 
     if (entryData.TagPage) {
-        const itemData = entryData.TagPage[0].graphql.hashtag;
+        const itemData = coalesce([
+            { obj: entryData, paths: ['TagPage[0].graphql.hashtag'] },
+            { obj: additionalData, paths: ['graphql.hashtag'] },
+        ]);
         return {
             pageType: PAGE_TYPES.HASHTAG,
             id: itemData.name,
@@ -45,7 +64,10 @@ const getItemSpec = (entryData) => {
     }
 
     if (entryData.ProfilePage) {
-        const itemData = entryData.ProfilePage[0].graphql.user;
+        const itemData = coalesce([
+            { obj: entryData, paths: ['ProfilePage[0].graphql.user'] },
+            { obj: additionalData, paths: ['graphql.user'] },
+        ]);
         return {
             pageType: PAGE_TYPES.PROFILE,
             id: itemData.username,
@@ -56,7 +78,11 @@ const getItemSpec = (entryData) => {
     }
 
     if (entryData.PostPage) {
-        const itemData = entryData.PostPage[0].graphql.shortcode_media;
+        const itemData = coalesce([
+            { obj: entryData, paths: ['PostPage[0].graphql.shortcode_media'] },
+            { obj: additionalData, paths: ['graphql.shortcode_media'] },
+        ]);
+
         return {
             pageType: PAGE_TYPES.POST,
             id: itemData.shortcode,
@@ -238,20 +264,6 @@ async function singleQuery(queryId, variables, nodeTransformationFunc, page, ite
     return query(gotParams, searchParams, nodeTransformationFunc, itemSpec, logPrefix);
 }
 
-function parseExtendOutputFunction(extendOutputFunction) {
-    let parsedExtendOutputFunction;
-    if (typeof extendOutputFunction === 'string' && extendOutputFunction.trim() !== '') {
-        try {
-            parsedExtendOutputFunction = eval(extendOutputFunction);
-        } catch (e) {
-            throw new Error(`'extendOutputFunction' is not valid Javascript! Error: ${e}`);
-        }
-        if (typeof parsedExtendOutputFunction !== 'function') {
-            throw new Error('extendOutputFunction is not a function! Please fix it or use just default ouput!');
-        }
-    }
-}
-
 /**
  * @param {string} caption
  */
@@ -410,10 +422,7 @@ const loadMore = async ({ itemSpec, page, retry = 0, type }) => {
                 ).catch(() => null),
             ]);
 
-            if ((await page.$$('[role="dialog"]')).length) {
-                // login popup appeared, abort
-                throw new Error('Login popup appeared, retrying...');
-            }
+            await acceptCookiesDialog(page);
 
             if (clicked[1]) break;
         } catch (e) {
@@ -434,7 +443,6 @@ const loadMore = async ({ itemSpec, page, retry = 0, type }) => {
     if (type === 'posts') {
         for (let i = 0; i < 10; i++) {
             scrolled = await Promise.all([
-                // eslint-disable-next-line no-restricted-globals
                 page.evaluate(() => window.scrollBy(0, 9999999)),
                 page.waitForRequest(
                     (request) => {
@@ -508,19 +516,19 @@ const loadMore = async ({ itemSpec, page, retry = 0, type }) => {
         });
     }
 
-    const retryDelay = (retry || 1) * 1000;
+    const retryDelay = (retry || 1) * 3500;
 
     if (!data && retry < 10 && (scrolled[1] || retry < 5)) {
         // We scroll the other direction than usual
         if (type === 'posts') {
             await page.evaluate(() => window.scrollBy(0, -1000));
         }
-        log(itemSpec, `Retry scroll after ${retryDelay / 1000} seconds`);
+        log(itemSpec, `Retry scroll after ${retryDelay / 3500} seconds`);
         await sleep(retryDelay);
         return loadMore({ itemSpec, page, retry: retry + 1, type });
     }
 
-    await sleep(retryDelay / 3);
+    await sleep(retryDelay / 2);
 
     return { data };
 };
@@ -585,12 +593,13 @@ const finiteScroll = async (context) => {
 
 /**
  * Load data from XHR request using current page cookies and headers
- * @param {Request} request - request as referer
- * @param {Puppeteer.Page} page - current page object
- * @param {String} url - xhr url
- * @param {String|null} proxyUrl - url of current proxy
- * @param {String} csrf_token - used in headers
- * @returns {Promise<Response>}
+ * @param {{
+ *   request: Apify.Request,
+ *   page: Puppeteer.Page,
+ *   url: string,
+ *   proxyUrl?: string,
+ *   csrf_token: string
+ * }} params
  */
 const loadXHR = async ({ request, page, url, proxyUrl, csrf_token }) => {
     const cookies = await page.cookies();
@@ -613,6 +622,7 @@ const loadXHR = async ({ request, page, url, proxyUrl, csrf_token }) => {
         proxyUrl,
         headers,
     });
+
     return res;
 };
 
@@ -636,6 +646,115 @@ const acceptCookiesDialog = async (page) => {
     return true;
 };
 
+/**
+ * @template T
+ * @typedef {T & { Apify: Apify, customData: any, request: Apify.Request }} PARAMS
+ */
+
+/**
+ * Compile a IO function for mapping, filtering and outputing items.
+ * Can be used as a no-op for interaction-only (void) functions on `output`.
+ * Data can be mapped and filtered twice.
+ *
+ * Provided base map and filter functions is for preparing the object for the
+ * actual extend function, it will receive both objects, `data` as the "raw" one
+ * and "item" as the processed one.
+ *
+ * Always return a passthrough function if no outputFunction provided on the
+ * selected key.
+ *
+ * @template RAW
+ * @template {{ [key: string]: any }} INPUT
+ * @template MAPPED
+ * @template {{ [key: string]: any }} HELPERS
+ * @param {{
+ *  key: string,
+ *  map?: (data: RAW, params: PARAMS<HELPERS>) => Promise<MAPPED>,
+ *  output?: (data: MAPPED, params: PARAMS<HELPERS>) => Promise<void>,
+ *  filter?: (obj: { data: RAW, item: MAPPED }, params: PARAMS<HELPERS>) => Promise<boolean>,
+ *  input: INPUT,
+ *  helpers: HELPERS,
+ * }} params
+ * @return {Promise<(data: RAW, args?: Record<string, any>) => Promise<void>>}
+ */
+const extendFunction = async ({
+    key,
+    output,
+    filter,
+    map,
+    input,
+    helpers,
+}) => {
+    /**
+     * @type {PARAMS<HELPERS>}
+     */
+    const base = {
+        ...helpers,
+        Apify,
+        customData: input.customData || {},
+    };
+
+    const evaledFn = (() => {
+        // need to keep the same signature for no-op
+        if (typeof input[key] !== 'string' || input[key].trim() === '') {
+            return new vm.Script('({ item }) => item');
+        }
+
+        try {
+            return new vm.Script(input[key], {
+                lineOffset: 0,
+                produceCachedData: false,
+                displayErrors: true,
+                filename: `${key}.js`,
+            });
+        } catch (e) {
+            throw new Error(`"${key}" parameter must be a function`);
+        }
+    })();
+
+    /**
+     * Returning arrays from wrapper function split them accordingly.
+     * Normalize to an array output, even for 1 item.
+     *
+     * @param {any} value
+     * @param {any} [args]
+     */
+    const splitMap = async (value, args) => {
+        const mapped = map ? await map(value, args) : value;
+
+        if (!Array.isArray(mapped)) {
+            return [mapped];
+        }
+
+        return mapped;
+    };
+
+    return async (data, args) => {
+        const merged = { ...base, ...args };
+
+        for (const item of await splitMap(data, merged)) {
+            if (filter && !(await filter({ data, item }, merged))) {
+                continue; // eslint-disable-line no-continue
+            }
+
+            const result = await (evaledFn.runInThisContext()({
+                ...merged,
+                data,
+                item,
+            }));
+
+            for (const out of (Array.isArray(result) ? result : [result])) {
+                if (output) {
+                    if (out !== null) {
+                        await output(out, merged);
+                    }
+                    // skip output
+                }
+            }
+        }
+    };
+};
+
 module.exports = {
     getPageTypeFromUrl,
     getItemSpec,
@@ -644,10 +763,11 @@ module.exports = {
     finiteQuery,
     acceptCookiesDialog,
     singleQuery,
-    parseExtendOutputFunction,
     parseCaption,
+    extendFunction,
     filterPushedItemsAndUpdateState,
     finiteScroll,
     shouldContinueScrolling,
     loadXHR,
+    coalesce,
 };

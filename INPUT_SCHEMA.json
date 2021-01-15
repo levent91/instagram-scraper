@@ -98,7 +98,7 @@
             "type": "integer",
             "description": "Setting this number too high might get your account blocked faster",
             "editor": "number",
-            "default": 3
+            "default": 15
         },
         "cookiesPerConcurrency": {
             "title": "Concurrency",
@@ -145,6 +145,32 @@
             "unit": "users",
             "default": 0
         },
+        "extendOutputFunction": {
+            "title": "Extend Output Function",
+            "description": "Add or remove properties on the output object or omit the output returning null",
+            "type": "string",
+            "default": "",
+            "prefill": "async ({ data, item, itemSpec, page, request, customData }) => {\n  return item;\n}",
+            "editor": "javascript",
+            "sectionCaption": "Extend scraper functionality",
+            "sectionDescription": "You can change the output of the items for your dataset here, or add additional behavior on the scraper."
+        },
+        "extendScraperFunction": {
+            "title": "Extend Scraper Function",
+            "description": "Advanced function that allows you to extend the default scraper functionality, allowing you to manually perform actions on the page",
+            "type": "string",
+            "default": "",
+            "prefill": "async ({ page, request, itemSpec, customData, Apify }) => {\n \n}",
+            "editor": "javascript"
+        },
+        "customData": {
+            "title": "Custom data",
+            "description": "Any data that you want to have available inside the Extend Output/Scraper Function",
+            "default": {},
+            "prefill": {},
+            "type": "object",
+            "editor": "json"
+        },
         "expandOwners": {
             "title": "Query post owner",
             "type": "boolean",
@@ -172,14 +198,6 @@
             "type": "boolean",
             "description": "If this feature is used, then for each user detail property has_public_story from xhr request is parsed.",
             "editor": "checkbox"
-        },
-        "extendOutputFunction": {
-            "title": "Extend output function",
-            "type": "string",
-            "nullable": true,
-            "description": "Function that takes a JQuery handle ($) as an argument and returns data that will be merged with the default output",
-            "prefill": "($) => { return {} }",
-            "editor": "javascript"
         }
     },
     "required": ["proxy"]
