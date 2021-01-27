@@ -52,7 +52,7 @@ Scraping **1000 profiles** requires about:
 - **0.24 GB of proxy traffic**
 
 #### Example pricing
-Considering Apify pricing at the time of writing this text, scraping **1000 profiles** would cost 10 CU * $0.25 + 0.24 GB * 12.5 GB which is a total of **$5.5**.
+Considering Apify pricing at the time of writing this text, scraping **1000 profiles** would cost 10 CU * $0.25 + 0.24 GB * 12.5 GB which is a total of **$5.5**. The Personal plan ($49) would allow you to scrape about 9000 Instagram profiles monthly.
 
 ## Scrolling through large profiles or posts
 Instagram imposes rate limits that will block scrolling if you want to scroll for more than 1000 posts or comments. To work around this issue, the scraper starts injecting randomized wait times once you reach 1000 posts or comments. This is configurable by means of the `scrollWaitSecs` input parameter. If you get the message that you were rate limited, consider increasing this parameter for the specific profile or post.
