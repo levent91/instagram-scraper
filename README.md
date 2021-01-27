@@ -2,6 +2,7 @@
 
 - [Instagram blocking access - proxies required](#Instagram-blocking-access---proxies-required)
 - [Features](#Features)
+- [Cost of usage](#Cost-of-usage)
 - [Input parameters](#Input-parameters)
 - [During the actor run](#During-the-actor-run)
 - [Using cookies to log in](#Using-cookies-to-log-in)
@@ -14,6 +15,9 @@ Instagram aggressively blocks access for scrapers and redirects to a login page.
 
 ### Apify residential proxies
 The Apify platform [provides residential proxies](https://apify.com/proxy?pricing=residential-ip#pricing) if you have a paid subscription. These proxies are provided only to be run within actors on the Apify platform, not externally. If you are interested in using residential proxies for this scraper, contact `support@apify.com` via email or in-app chat to get the proxies enabled (a small test is possible).
+
+### Custom proxies
+You can also use proxies from other providers in the custom proxies fields (`proxyUrls` in the JSON settings).
 
 ## Features
 Since Instagram has removed the option to load public data through its API, this actor should help replace this functionality. It allows you to scrape posts from a user's profile page, hashtag page, or place. When a link to an Instagram post is provided, it can scrape Instagram comments.
@@ -32,8 +36,23 @@ The Instagram data scraper supports the following features:
 
 If you want to know more about how the Instagram Scraper works, I wrote a short introduction on the [Apify blog](https://medium.com/p/21d05506aeb3).
 
-### Custom proxies
-You can also use proxies from other providers in the custom proxies fields (`proxyUrls` in the JSON settings).
+## Cost of usage
+There are two main components if you want to run Instagram Scraper on the Apify platform:
+- [Compute units](https://apify.com/pricing/actors) - used for running the scraper
+- [Residential proxy traffic](https://apify.com/pricing/proxy) - needed to access Instagram without login
+
+The usage costs differs depending on what type of page you are scraping. Some pages like details need to be just opened while other pages like comments require long scrolling. You can sort of compare how long it takes to do these operations manually to get an idea about how to transfer usage costs from one use-case to another.
+
+### Free plan
+Apify provides a free plan where you can test your setup. You need to ask the support team to get access to the residential proxy as it is not included in the free plan.
+
+### Profile scraping
+Scraping **1000 profiles** requires about:
+- **10 Compute units**
+- **0.24 GB of proxy traffic**
+
+#### Example pricing
+Considering Apify pricing at the time of writing this text, scraping **1000 profiles** would cost 10 CU * $0.25 + 0.24 GB * 12.5 GB which is a total of **$5.5**.
 
 ## Scrolling through large profiles or posts
 Instagram imposes rate limits that will block scrolling if you want to scroll for more than 1000 posts or comments. To work around this issue, the scraper starts injecting randomized wait times once you reach 1000 posts or comments. This is configurable by means of the `scrollWaitSecs` input parameter. If you get the message that you were rate limited, consider increasing this parameter for the specific profile or post.
