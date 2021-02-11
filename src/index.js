@@ -7,7 +7,8 @@ const { scrapeStories } = require('./stories');
 const { scrapeDetails } = require('./details');
 const { searchUrls } = require('./search');
 const { getItemSpec, getPageTypeFromUrl, extendFunction } = require('./helpers');
-const { GRAPHQL_ENDPOINT, ABORT_RESOURCE_TYPES, ABORT_RESOURCE_URL_INCLUDES, SCRAPE_TYPES } = require('./consts');
+const { GRAPHQL_ENDPOINT, ABORT_RESOURCE_TYPES, ABORT_RESOURCE_URL_INCLUDES, SCRAPE_TYPES,
+    ABORT_RESOURCE_URL_DOWNLOAD_JS, PAGE_TYPES } = require('./consts');
 const { initQueryIds } = require('./query_ids');
 const errors = require('./errors');
 const { login } = require('./login');
@@ -33,6 +34,7 @@ async function main() {
         useChrome,
         includeHasStories = false,
         cookiesPerConcurrency = 1,
+        blockMoreAssets = false,
     } = input;
 
     if (proxy && proxy.proxyUrls && proxy.proxyUrls.length === 0) delete proxy.proxyUrls;
@@ -189,30 +191,57 @@ async function main() {
         const { pageType } = request.userData;
         Apify.utils.log.info(`Opening page type: ${pageType} on ${request.url}`);
 
-        page.on('request', async (req) => {
-            // We need to load some JS when we want to scroll
-            // Hashtag & place pages seems to require even more JS allowed but this needs more research
-            // Stories needs JS files
-            const isCacheable = req.url().includes('instagram.com/static/bundles');
+        // Old code to keep consumption low for Lafl
+        if (blockMoreAssets) {
+            const isScrollPage = resultsType === SCRAPE_TYPES.POSTS || resultsType === SCRAPE_TYPES.COMMENTS;
+            page.on('request', (req) => {
+                // We need to load some JS when we want to scroll
+                // Hashtag & place pages seems to require even more JS allowed but this needs more research
+                // Stories needs JS files
+                const isJSBundle = req.url().includes('instagram.com/static/bundles/');
+                const abortJSBundle = isScrollPage
+                    ? (!ABORT_RESOURCE_URL_DOWNLOAD_JS.some((urlMatch) => req.url().includes(urlMatch))
+                        && ![PAGE_TYPES.HASHTAG, PAGE_TYPES.PLACE].includes(pageType))
+                    : true;
 
-            if (ABORT_RESOURCE_TYPES.includes(req.resourceType())) {
-                // Apify.utils.log.debug(`Aborting url: ${req.url()}`);
-                await req.abort();
-                return;
-            }
+                if (
+                    ABORT_RESOURCE_TYPES.includes(req.resourceType())
+                    || ABORT_RESOURCE_URL_INCLUDES.some((urlMatch) => req.url().includes(urlMatch))
+                    || (isJSBundle && abortJSBundle && pageType)
+                ) {
+                    // log.debug(`Aborting url: ${req.url()}`);
+                    return req.abort();
+                }
+                // log.debug(`Processing url: ${req.url()}`);
+                req.continue();
+            });
+        } else {
+            // Main path, code made by Paulo, works well for worksloads that can be cached
+            page.on('request', async (req) => {
+                // We need to load some JS when we want to scroll
+                // Hashtag & place pages seems to require even more JS allowed but this needs more research
+                // Stories needs JS files
+                const isCacheable = req.url().includes('instagram.com/static/bundles');
 
-            if (isCacheable) {
-                const url = req.url();
-                if (memoryCache.has(url)) {
-                    Apify.utils.log.debug('Has cache', { url });
-                    await req.respond(memoryCache.get(url));
+                if (ABORT_RESOURCE_TYPES.includes(req.resourceType())) {
+                    // Apify.utils.log.debug(`Aborting url: ${req.url()}`);
+                    await req.abort();
                     return;
                 }
-            }
 
-            // Apify.utils.log.debug(`Processing url: ${req.url()}`);
-            await req.continue();
-        });
+                if (isCacheable) {
+                    const url = req.url();
+                    if (memoryCache.has(url)) {
+                        Apify.utils.log.debug('Has cache', { url });
+                        await req.respond(memoryCache.get(url));
+                        return;
+                    }
+                }
+
+                // Apify.utils.log.debug(`Processing url: ${req.url()}`);
+                await req.continue();
+            });
+        }
 
         page.on('response', async (response) => {
             const responseUrl = response.url();
