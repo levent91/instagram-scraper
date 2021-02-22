@@ -436,13 +436,6 @@ Apify.main(async () => {
     };
 
     /**
-     * @type {Apify.LaunchPuppeteerFunction}
-     */
-    const launchPuppeteerFunction = async (options) => {
-        return Apify.launchPuppeteer();
-    };
-
-    /**
      * @type {Apify.Session[]}
      */
     const loginSessions = [];
