@@ -3,7 +3,4 @@ node_modules
 debug.log
 .idea
 .vscode
-
-apify_storage
-
-apify_storage
+.DS_Store

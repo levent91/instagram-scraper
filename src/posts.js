@@ -94,7 +94,7 @@ const scrapePost = (request, itemSpec, entryData, additionalData) => {
  * @param {Object} entryData data from window._shared_data.entry_data
  * @param {Object} input Input provided by user
  */
-const scrapePosts = async ({ page, itemSpec, entryData, scrollingState, puppeteerPool }) => {
+const scrapePosts = async ({ page, itemSpec, entryData, scrollingState, session }) => {
     const timeline = getPostsFromEntryData(itemSpec.pageType, entryData);
     initData[itemSpec.id] = timeline;
 
@@ -158,7 +158,7 @@ const scrapePosts = async ({ page, itemSpec, entryData, scrollingState, puppetee
     const isUnloggedPlace = itemSpec.pageType === PAGE_TYPES.PLACE && !itemSpec.input.loginCookies;
     if (isUnloggedPlace) {
         log(itemSpec, 'Place/location pages allow scrolling only under login, collecting initial posts and finishing', LOG_TYPES.WARNING);
-        await puppeteerPool.retire(page.browser());
+        session.retire();
         return;
     }
 
@@ -173,14 +173,14 @@ const scrapePosts = async ({ page, itemSpec, entryData, scrollingState, puppetee
                 scrollingState,
                 getItemsFromGraphQLFn: getPostsFromGraphQL,
                 type: 'posts',
-                puppeteerPool,
+                session,
             });
         }
     } else {
         // We have to forcefully close the browser here because it hangs sometimes for some listeners reasons
         // Because we always have max one page per browser, this is fine
         console.log(`Puppeteer retire posts.js line 176`);
-        await puppeteerPool.retire(page.browser());
+        await session.retire();
     }
 };
 

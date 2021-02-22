@@ -1,4 +1,4 @@
-FROM apify/actor-node-chrome-xvfb
+FROM apify/actor-node-puppeteer-chrome
 
 # Copy source code
 COPY . ./
@@ -14,7 +14,3 @@ RUN npm --quiet set progress=false \
  && npm --version
 
 ENV APIFY_DISABLE_OUTDATED_WARNING 1
-
-# By default, the apify/actor-node-chrome image uses "npm start" to run the code.
-# You can override this behavior using the CMD instruction here:
-# CMD [ "npm", "start", "--silent" ]
