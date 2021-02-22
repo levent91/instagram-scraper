@@ -1,4 +1,4 @@
-FROM apify/actor-node-chrome-xvfb
+FROM apify/actor-node-puppeteer-chrome
 
 # Copy source code
 COPY . ./

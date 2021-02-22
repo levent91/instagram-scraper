@@ -429,7 +429,7 @@ Apify.main(async () => {
                 }
             } catch (e) {
                 Apify.utils.log.debug('Retiring browser', { url: request.url });
-                await session.retire();
+                session.retire();
                 throw e;
             }
         }
