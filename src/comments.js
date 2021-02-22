@@ -38,10 +38,9 @@ const getCommentsFromGraphQL = ({ data }) => {
  *   entryData: any,
  *   additionalData: any,
  *   scrollingState: any,
- *   puppeteerPool: Apify.PuppeteerPool
  * }} params
  */
-const scrapeComments = async ({ page, itemSpec, entryData, additionalData, scrollingState, puppeteerPool }) => {
+const scrapeComments = async ({ page, itemSpec, entryData, additionalData, scrollingState, session }) => {
     // Check that current page is of a type which has comments
     if (itemSpec.pageType !== PAGE_TYPES.POST) throw errors.notPostPage();
 
@@ -82,7 +81,7 @@ const scrapeComments = async ({ page, itemSpec, entryData, additionalData, scrol
             scrollingState,
             getItemsFromGraphQLFn: getCommentsFromGraphQL,
             type: 'comments',
-            puppeteerPool,
+            session,
         });
     }
 };

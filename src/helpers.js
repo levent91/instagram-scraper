@@ -540,7 +540,7 @@ const finiteScroll = async (context) => {
         scrollingState,
         getItemsFromGraphQLFn,
         type,
-        puppeteerPool,
+        session,
     } = context;
     // console.log('starting finite scroll');
     const oldItemCount = Object.keys(scrollingState[itemSpec.id].ids).length;
@@ -558,7 +558,7 @@ const finiteScroll = async (context) => {
             // log(itemSpec, 'Cannot find new page of scrolling, storing last page dump to KV store', LOG_TYPES.WARNING);
             // await Apify.setValue(`LAST-PAGE-DUMP-${itemSpec.id}`, data);
             // We have to do these retires because the browser sometimes hang on, should be fixable with something else though
-            await puppeteerPool.retire(page.browser());
+            session.retire();
 
             // this is actually expected, the total count usually isn't the amount of actual loaded comments/posts
             return;

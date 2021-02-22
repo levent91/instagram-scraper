@@ -15,7 +15,7 @@ const { login } = require('./login');
 
 const { sleep } = Apify.utils;
 
-async function main() {
+Apify.main(async () => {
     const input = await Apify.getInput();
     const {
         proxy,
@@ -133,9 +133,10 @@ async function main() {
     });
 
     /**
-     * @type {Apify.PuppeteerGoto}
+     * Fix prenav hook
+     * @type {any}
      */
-    const gotoFunction = async ({ request, page, puppeteerPool, session }) => {
+    const preNavigationHook = async ({ request, page, session }) => {
         await page.setBypassCSP(true);
 
         await page.setViewport({
@@ -193,6 +194,7 @@ async function main() {
 
         // Old code to keep consumption low for Lafl
         if (blockMoreAssets) {
+            console.log('Blocking more assets')
             const isScrollPage = resultsType === SCRAPE_TYPES.POSTS || resultsType === SCRAPE_TYPES.COMMENTS;
             page.on('request', (req) => {
                 // We need to load some JS when we want to scroll
@@ -304,25 +306,12 @@ async function main() {
                 setTimeout(closeModal, 3000);
             });
         }, request.userData.pageType);
+    };
 
-        const response = await (async () => {
-            try {
-                return await page.goto(request.url, {
-                    // itemSpec timeouts
-                    timeout: pageTimeout * 1000,
-                });
-            } catch (e) {
-                // this usually means that the proxy 100% failing and will keep trying until failing all retries
-                if (loginCount > 0) {
-                    session.markBad();
-                } else {
-                    session.retire();
-                }
-                await puppeteerPool.retire(page.browser());
-                throw new Error('Page isn\'t loading, trying another proxy');
-            }
-        })();
-
+    /**
+     * @type {Apify.PuppeteerHandlePage}
+     */
+    const handlePageFunction = async ({ page, request, response, session }) => {
         if (loginCount > 0) {
             try {
                 await page.waitForFunction(() => {
@@ -338,7 +327,7 @@ async function main() {
                     session.markBad();
 
                     if (!loginSessions.find((s) => s.isUsable())) {
-                        await puppeteerPool.retire(page.browser());
+                        session.retire();
                         throw new Error('Failed to log in using cookies, they are probably no longer usable and you need to set new ones.');
                     } else {
                         Apify.utils.log.error('No login cookies available.');
@@ -352,18 +341,6 @@ async function main() {
                 throw new Error('Page didn\'t load properly with login, retrying...');
             }
         }
-
-        if (!response) {
-            throw new Error('Response is invalid');
-        }
-
-        return response;
-    };
-
-    /**
-     * @type {Apify.PuppeteerHandlePage}
-     */
-    const handlePageFunction = async ({ page, puppeteerPool, request, response, session }) => {
         if (SCRAPE_TYPES.COOKIES === resultsType) return;
         const proxyUrl = proxyConfiguration ? proxyConfiguration.newUrl(session.id) : undefined;
 
@@ -400,13 +377,7 @@ async function main() {
         const { entry_data: entryData } = data;
 
         if (entryData.LoginAndSignupPage) {
-            if (loginCount > 0) {
-                session.markBad();
-            } else {
-                session.retire();
-            }
-            // TODO: Bug in SDK puppeteerPool === undefined. Also this should not be used when session.retire works so remove later
-            await puppeteerPool.retire(page.browser());
+            session.retire();
             throw errors.redirectedToLogin();
         }
 
@@ -433,10 +404,10 @@ async function main() {
             try {
                 switch (resultsType) {
                     case SCRAPE_TYPES.POSTS:
-                        await scrapePosts({ page, request, itemSpec, entryData, input, scrollingState, puppeteerPool });
+                        await scrapePosts({ page, request, itemSpec, entryData, input, scrollingState, session });
                         break;
                     case SCRAPE_TYPES.COMMENTS:
-                        await scrapeComments({ page, request, additionalData, itemSpec, entryData, scrollingState, puppeteerPool });
+                        await scrapeComments({ page, request, additionalData, itemSpec, entryData, scrollingState, session });
                         break;
                     case SCRAPE_TYPES.DETAILS:
                         await scrapeDetails({
@@ -458,13 +429,7 @@ async function main() {
                 }
             } catch (e) {
                 Apify.utils.log.debug('Retiring browser', { url: request.url });
-                if (loginCount > 0) {
-                    session.markBad();
-                } else {
-                    session.retire();
-                }
-                // TODO: Bug in SDK puppeteerPool === undefined. Also this should not be used when session.retire works so remove later
-                await puppeteerPool.retire(page.browser());
+                await session.retire();
                 throw e;
             }
         }
@@ -474,18 +439,7 @@ async function main() {
      * @type {Apify.LaunchPuppeteerFunction}
      */
     const launchPuppeteerFunction = async (options) => {
-        return Apify.launchPuppeteer({
-            ...options,
-            stealth: useStealth,
-            useChrome: typeof useChrome === 'boolean' ? useChrome : Apify.isAtHome(),
-            ignoreHTTPSErrors: true,
-            args: [
-                '--enable-features=NetworkService',
-                '--ignore-certificate-errors',
-                '--disable-blink-features=AutomationControlled', // removes webdriver from window.navigator
-            ],
-            devtools: !Apify.isAtHome(),
-        });
+        return Apify.launchPuppeteer();
     };
 
     /**
@@ -512,11 +466,25 @@ async function main() {
     const crawler = new Apify.PuppeteerCrawler({
         requestList,
         requestQueue,
-        gotoFunction,
+        preNavigationHooks: [preNavigationHook],
         maxRequestRetries,
-        puppeteerPoolOptions: {
-            useIncognitoPages: true,
-            maxOpenPagesPerInstance: 1,
+        launchContext: {
+            stealth: useStealth,
+            useChrome: typeof useChrome === 'boolean' ? useChrome : Apify.isAtHome(),
+            launchOptions: {
+                ignoreHTTPSErrors: true,
+                args: [
+                    '--enable-features=NetworkService',
+                    '--ignore-certificate-errors',
+                    '--disable-blink-features=AutomationControlled', // removes webdriver from window.navigator
+                ],
+                devtools: !Apify.isAtHome(),
+            },
+        },
+        browserPoolOptions: {
+            // TODO: Review and fix this in SDK 1
+            // useIncognitoPages: true,
+            maxOpenPagesPerBrowser: 1,
         },
         sessionPoolOptions: {
             // eslint-disable-next-line no-nested-ternary
@@ -541,9 +509,7 @@ async function main() {
                 });
             },
         },
-        useSessionPool: true,
         proxyConfiguration: proxyConfiguration || undefined,
-        launchPuppeteerFunction,
         maxConcurrency,
         handlePageTimeoutSecs: 300 * 60, // Ex: 5 hours to crawl thousands of comments
         handlePageFunction,
@@ -565,6 +531,4 @@ async function main() {
             Apify.utils.log.warning(`Invalid cookies count: ${invalid}`);
         }
     }
-}
-
-module.exports = main;
+});
