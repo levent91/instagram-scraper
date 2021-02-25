@@ -69,6 +69,8 @@ const formatSinglePost = (node) => {
         ownerFullName: node.owner ? node.owner.full_name : null,
         ownerUsername: node.owner ? node.owner.username : null,
         ownerId: node.owner ? node.owner.id : null,
+        product_type: node.product_type,
+        isSponsored: node.is_ad
     };
 };
 
