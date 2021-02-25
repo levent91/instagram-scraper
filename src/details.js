@@ -61,7 +61,7 @@ const formatSinglePost = (node) => {
         firstComment: comments && comments.edges && comments.edges[0] && comments.edges[0].node.text,
         alt: node.accessibility_caption,
         likesCount: likes ? likes.count : null,
-        videoDuration: node.video_duration : null,
+        videoDuration: node.video_duration,
         videoViewCount: node.video_view_count,
         timestamp: node.taken_at_timestamp ? new Date(parseInt(node.taken_at_timestamp, 10) * 1000) : null,
         locationName: node.location ? node.location.name : null,
@@ -69,8 +69,8 @@ const formatSinglePost = (node) => {
         ownerFullName: node.owner ? node.owner.full_name : null,
         ownerUsername: node.owner ? node.owner.username : null,
         ownerId: node.owner ? node.owner.id : null,
-        productType: node.product_type: null,
-        isSponsored: node.is_ad : null
+        productType: node.product_type,
+        isSponsored: node.is_ad
     };
 };
 
