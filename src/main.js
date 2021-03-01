@@ -35,6 +35,7 @@ Apify.main(async () => {
         includeHasStories = false,
         cookiesPerConcurrency = 1,
         blockMoreAssets = false,
+        checkProxyIp = false, // For internal debug
     } = input;
 
     if (proxy && proxy.proxyUrls && proxy.proxyUrls.length === 0) delete proxy.proxyUrls;
@@ -139,6 +140,7 @@ Apify.main(async () => {
     const preNavigationHook = async ({ request, page, session }) => {
         await page.setBypassCSP(true);
 
+        /* not sure if this can be any helpful
         await page.setViewport({
             ..._.sample([{
                 width: 1920,
@@ -153,6 +155,7 @@ Apify.main(async () => {
             isMobile: false,
             deviceScaleFactor: _.sample([1, 2, 4]),
         });
+        */
 
         if (loginUsername && loginPassword && resultsType === SCRAPE_TYPES.COOKIES) {
             await login(loginUsername, loginPassword, page);
@@ -170,20 +173,22 @@ Apify.main(async () => {
             await page.setCookie(...cookies.map((s) => ({ ...s, domain: '.instagram.com' })));
         }
 
-        await Apify.utils.puppeteer.blockRequests(page, {
-            urlPatterns: [
-                '.ico',
-                '.png',
-                '.mp4',
-                '.avi',
-                '.webp',
-                '.jpg',
-                '.jpeg',
-                '.gif',
-                '.svg',
-            ],
-            extraUrlPatterns: ABORT_RESOURCE_URL_INCLUDES,
-        });
+        if (!checkProxyIp) {
+            await Apify.utils.puppeteer.blockRequests(page, {
+                urlPatterns: [
+                    '.ico',
+                    '.png',
+                    '.mp4',
+                    '.avi',
+                    '.webp',
+                    '.jpg',
+                    '.jpeg',
+                    '.gif',
+                    '.svg',
+                ],
+                extraUrlPatterns: ABORT_RESOURCE_URL_INCLUDES,
+            });
+        }
 
         // Request interception disables chromium cache, implement in-memory cache for
         // resources, will save literal MBs of traffic https://help.apify.com/en/articles/2424032-cache-responses-in-puppeteer
@@ -225,7 +230,7 @@ Apify.main(async () => {
                 // Stories needs JS files
                 const isCacheable = req.url().includes('instagram.com/static/bundles');
 
-                if (ABORT_RESOURCE_TYPES.includes(req.resourceType())) {
+                if (!checkProxyIp && ABORT_RESOURCE_TYPES.includes(req.resourceType())) {
                     // Apify.utils.log.debug(`Aborting url: ${req.url()}`);
                     await req.abort();
                     return;
@@ -312,6 +317,14 @@ Apify.main(async () => {
      * @type {Apify.PuppeteerHandlePage}
      */
     const handlePageFunction = async ({ page, request, response, session }) => {
+        if (checkProxyIp) {
+            await page.setBypassCSP(true);
+            const { clientIp } = await page.evaluate(async () => {
+                return fetch('https://api.apify.com/v2/browser-info').then((res) => res.json());
+            });
+            console.log(`Opening page from IP: ${clientIp}`);
+        }
+
         if (loginCount > 0) {
             try {
                 await page.waitForFunction(() => {
@@ -471,7 +484,6 @@ Apify.main(async () => {
                     '--ignore-certificate-errors',
                     '--disable-blink-features=AutomationControlled', // removes webdriver from window.navigator
                 ],
-                devtools: !Apify.isAtHome(),
             },
         },
         browserPoolOptions: {
