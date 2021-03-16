@@ -9,7 +9,7 @@
 		"@types/tough-cookie": "^4.0.0",
 		"@types/tunnel": "0.0.1",
 		"@types/underscore": "^1.10.24",
-		"apify": "^1.0.1",
+		"apify": "^1.0.2",
 		"got": "^9.6.0",
 		"lodash.get": "^4.4.2",
 		"puppeteer": "^7.1.0",

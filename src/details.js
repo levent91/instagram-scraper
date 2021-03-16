@@ -31,7 +31,16 @@ const formatIGTVVideo = (edge) => {
 // Formats list of display recources into URLs
 const formatDisplayResources = (resources) => {
     if (!resources) return [];
-    return resources.map((resource) => resource.node.display_url);
+    return resources.map((resource) => resource.node.display_url).filter(s => s);
+};
+
+const sidecarImages = (node) => {
+    return node
+        && node.edge_sidecar_to_children
+        && node.edge_sidecar_to_children.edges
+        && Array.isArray(node.edge_sidecar_to_children.edges)
+        ? formatDisplayResources(node.edge_sidecar_to_children.edges)
+        : [];
 };
 
 // Format Post Edge item into cleaner output
@@ -56,6 +65,7 @@ const formatSinglePost = (node) => {
         dimensionsHeight: node.dimensions.height,
         dimensionsWidth: node.dimensions.width,
         displayUrl: node.display_url,
+        images: sidecarImages(node),
         videoUrl: node.video_url,
         id: node.id,
         firstComment: comments && comments.edges && comments.edges[0] && comments.edges[0].node.text,

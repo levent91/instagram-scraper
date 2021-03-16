@@ -1,3 +1,12 @@
+### 2021-03-16
+
+#### Bug fixes
+- Fix login cookies
+
+#### New features
+- Added `images` to the dataset
+- Update to SDK 1.0.2
+
 ### 2020-10-17 Bug fixes and some improvements
 
 #### Bug fixes

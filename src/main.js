@@ -168,9 +168,18 @@ Apify.main(async () => {
         }
 
         if (loginCount > 0) {
-            const cookies = session.getPuppeteerCookies('https://instagram.com');
-            // page.cookies / getPuppeteerCookies have different settings for domain
-            await page.setCookie(...cookies.map((s) => ({ ...s, domain: '.instagram.com' })));
+            const cookies = [
+                ...session.getPuppeteerCookies('https://instagram.com'),
+                ...session.getPuppeteerCookies('https://www.instagram.com'),
+            ];
+
+            if (cookies.length) {
+                // page.cookies / getPuppeteerCookies have different settings for domain
+                // DO NOT REMOVE THIS
+                await page.setCookie(...cookies
+                    .filter((s) => `${s.domain}`.includes('instagram'))
+                    .map((s) => ({ ...s, domain: '.instagram.com' })));
+            }
         }
 
         if (!checkProxyIp) {
@@ -472,6 +481,8 @@ Apify.main(async () => {
     const crawler = new Apify.PuppeteerCrawler({
         requestList,
         requestQueue,
+        persistCookiesPerSession: true,
+        useSessionPool: true,
         preNavigationHooks: [preNavigationHook],
         maxRequestRetries,
         launchContext: {
@@ -494,7 +505,7 @@ Apify.main(async () => {
         sessionPoolOptions: {
             // eslint-disable-next-line no-nested-ternary
             maxPoolSize: loginCount > 0 ? loginCount : (resultsType === SCRAPE_TYPES.COOKIES ? 1 : undefined),
-            createSessionFunction(sessionPool) {
+            async createSessionFunction(sessionPool) {
                 if (loginCount > 0) {
                     if (!loginSessions.length) {
                         if (Array.isArray(loginCookies[0])) {
@@ -506,7 +517,11 @@ Apify.main(async () => {
                         }
                     }
 
-                    return loginSessions.find((s) => s.isUsable());
+                    const foundSession = loginSessions.find((s) => s.isUsable());
+
+                    if (foundSession) {
+                        return foundSession;
+                    }
                 }
 
                 return new Apify.Session({
