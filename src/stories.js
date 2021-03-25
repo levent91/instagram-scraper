@@ -1,9 +1,7 @@
 const Apify = require('apify');
 const Puppeteer = require('puppeteer'); // eslint-disable-line no-unused-vars
 
-const { utils: { requestAsBrowser } } = Apify;
 const { storiesNotLoaded } = require('./errors');
-const { HEADERS } = require('./consts');
 const { loadXHR } = require('./helpers');
 
 /**
