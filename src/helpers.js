@@ -518,7 +518,7 @@ const loadMore = async ({ itemSpec, page, retry = 0, type }) => {
 
     const retryDelay = (retry || 1) * 3500;
 
-    if (!data && retry < 10 && (scrolled[1] || retry < 5)) {
+    if (!data && retry < 4 && (scrolled[1] || retry < 5)) {
         // We scroll the other direction than usual
         if (type === 'posts') {
             await page.evaluate(() => window.scrollBy(0, -1000));

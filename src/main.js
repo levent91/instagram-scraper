@@ -1,6 +1,6 @@
 const Apify = require('apify');
-const _ = require('underscore');
 
+const { resourceCache } = require('./resource-cache');
 const { scrapePosts, handlePostsGraphQLResponse, scrapePost } = require('./posts');
 const { scrapeComments, handleCommentsGraphQLResponse } = require('./comments');
 const { scrapeStories } = require('./stories');
@@ -16,6 +16,7 @@ const { login } = require('./login');
 const { sleep } = Apify.utils;
 
 Apify.main(async () => {
+    /** @type {any} */
     const input = await Apify.getInput();
     const {
         proxy,
@@ -87,7 +88,7 @@ Apify.main(async () => {
         Apify.utils.log.warning('Search is disabled when Direct URLs are used');
         urls = directUrls;
     } else {
-        urls = await searchUrls(input, proxyConfiguration ? proxyConfiguration.newUrl() : undefined);
+        urls = await searchUrls(input, proxyConfiguration);
     }
 
     const requestListSources = urls.map((url) => ({
@@ -110,7 +111,9 @@ Apify.main(async () => {
 
     const requestList = await Apify.openRequestList('request-list', requestListSources);
     // keeps JS and CSS in a memory cache, since request interception disables cache
-    const memoryCache = new Map();
+    const memoryCache = resourceCache([
+        /static\/bundles/,
+    ]);
 
     // TODO: Move everything here
     const extendOutputFunction = await extendFunction({
@@ -186,13 +189,9 @@ Apify.main(async () => {
             await Apify.utils.puppeteer.blockRequests(page, {
                 urlPatterns: [
                     '.ico',
-                    '.png',
                     '.mp4',
                     '.avi',
                     '.webp',
-                    '.jpg',
-                    '.jpeg',
-                    '.gif',
                     '.svg',
                 ],
                 extraUrlPatterns: ABORT_RESOURCE_URL_INCLUDES,
@@ -233,43 +232,11 @@ Apify.main(async () => {
             });
         } else {
             // Main path, code made by Paulo, works well for worksloads that can be cached
-            page.on('request', async (req) => {
-                // We need to load some JS when we want to scroll
-                // Hashtag & place pages seems to require even more JS allowed but this needs more research
-                // Stories needs JS files
-                const isCacheable = req.url().includes('instagram.com/static/bundles');
-
-                if (!checkProxyIp && ABORT_RESOURCE_TYPES.includes(req.resourceType())) {
-                    // Apify.utils.log.debug(`Aborting url: ${req.url()}`);
-                    await req.abort();
-                    return;
-                }
-
-                if (isCacheable) {
-                    const url = req.url();
-                    if (memoryCache.has(url)) {
-                        Apify.utils.log.debug('Has cache', { url });
-                        await req.respond(memoryCache.get(url));
-                        return;
-                    }
-                }
-
-                // Apify.utils.log.debug(`Processing url: ${req.url()}`);
-                await req.continue();
-            });
+            await memoryCache(page);
         }
 
         page.on('response', async (response) => {
             const responseUrl = response.url();
-            const isCacheable = responseUrl.includes('instagram.com/static/bundles');
-
-            if (isCacheable && !memoryCache.has(responseUrl)) {
-                Apify.utils.log.debug('Adding cache', { responseUrl });
-                memoryCache.set(responseUrl, {
-                    headers: response.headers(),
-                    body: await response.buffer(),
-                });
-            }
 
             // Skip non graphql responses
             if (!responseUrl.startsWith(GRAPHQL_ENDPOINT)) return;
