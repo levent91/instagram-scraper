@@ -453,4 +453,4 @@ This scraper is under active development, so check [CHANGELOG.md](https://github
 
 ## Acknowledgments
 
-This scraper clicks cookies and privacy consent dialogs in your behalf
+This scraper clicks cookies and privacy consent dialogs on your behalf
