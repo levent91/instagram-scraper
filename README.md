@@ -1,25 +1,19 @@
 # Instagram Scraper
 
-- [Instagram blocking access - proxies required](#Instagram-blocking-access---proxies-required)
-- [Features](#Features)
-- [Cost of usage](#Cost-of-usage)
-- [Input parameters](#Input-parameters)
-- [During the actor run](#During-the-actor-run)
-- [Using cookies to log in](#Using-cookies-to-log-in)
-- [Instagram output format](#Instagram-output-format)
-- [Extend output function](#Extend-output-function)
-- [Changelog](#Changelog)
-
 ## Instagram blocking access - proxies required
+
 Instagram aggressively blocks access for scrapers and redirects to a login page. Currently, the only reliable solution to this problem is to use residential proxies. Datacenter proxies work only in rare cases.
 
 ### Apify residential proxies
+
 The Apify platform [provides residential proxies](https://apify.com/proxy?pricing=residential-ip#pricing) if you have a paid subscription. These proxies are provided only to be run within actors on the Apify platform, not externally. If you are interested in using residential proxies for this scraper, contact `support@apify.com` via email or in-app chat to get the proxies enabled (a small test is possible).
 
 ### Custom proxies
+
 You can also use proxies from other providers in the custom proxies fields (`proxyUrls` in the JSON settings).
 
 ## Features
+
 Since Instagram has removed the option to load public data through its API, this actor should help replace this functionality. It allows you to scrape posts from a user's profile page, hashtag page, or place. When a link to an Instagram post is provided, it can scrape Instagram comments.
 
 The Instagram data scraper supports the following features:
@@ -37,6 +31,7 @@ The Instagram data scraper supports the following features:
 If you want to know more about how the Instagram Scraper works, here's a short introduction on the [Apify blog](https://medium.com/p/21d05506aeb3).
 
 ## Cost of usage
+
 There are two main components to take into account if you want to run Instagram Scraper on the Apify platform:
 - [Compute units](https://apify.com/pricing/actors) - used for running the scraper
 - [Residential proxy traffic](https://apify.com/pricing/proxy) - needed to access Instagram without login
@@ -44,17 +39,21 @@ There are two main components to take into account if you want to run Instagram 
 The usage costs differ depending on what type of page you are scraping. Some pages, such as details, just need to be opened, while other pages, such as comments, require a lot of scrolling. You should roughly compare how long it takes to do these operations manually to get an idea about how to transfer usage costs from one use case to another.
 
 ### Free plan
+
 Apify provides a free plan where you can test your setup. You need to ask the support team to get access to the residential proxy as it is not included in the free plan.
 
 ### Profile scraping
+
 Scraping **1000 profiles** requires about:
 - **10 Compute units**
 - **0.24 GB of proxy traffic**
 
 #### Example pricing
+
 Based on Apify's pricing at the time of writing, scraping **1000 profiles** would cost 10 CU * $0.25 + 0.24 GB * 12.5 GB which is a total of **$5.5**. The Personal plan ($49) would allow you to scrape about 9000 Instagram profiles monthly.
 
 ## Scrolling through large profiles or posts
+
 Instagram imposes rate limits that will block scrolling if you want to scroll for more than 1000 posts or comments. To work around this issue, the scraper starts injecting randomized wait times once you reach 1000 posts or comments. This is configurable by means of the `scrollWaitSecs` input parameter. If you get the message that you were rate limited, consider increasing this parameter for the specific profile or post.
 
 ## Input parameters
@@ -82,6 +81,7 @@ The input of this scraper should be JSON containing the list of pages on Instagr
 This solution requires the use of **Proxy servers**, either your own proxy servers or you can use <a href="https://www.apify.com/docs/proxy">Apify Proxy</a>.
 
 ### Instagram scraper Input example
+
 ```json
 {
     "search": "Náměstí míru",
@@ -102,6 +102,7 @@ During the run, the actor will output messages letting you know what is going on
 If you provide incorrect input to the actor, it will immediately stop with failure state and output an explanation of what is wrong.
 
 ## Using cookies to log in
+
 This solution allows you to log in using the already initialized cookies of a logged-in user. If you use this option, the scraper will do as much as possible to prevent the account from being banned (slow down to just one page open at a time and introduce delays between actions).
 
 **It's highly recommended not to use your own account (unless you have to). You should instead create a new Instagram account to use with this solution.**
@@ -119,6 +120,7 @@ The actor stores its results in a dataset. Each item is a separate item in the d
 You can manage the results in any language (Python, PHP, Node JS/NPM). See <a href="https://www.apify.com/docs/api" target="blank">our API reference</a> to learn more about getting results from the Instagram Scraper.
 
 ### Scraped Instagram posts
+
 The structure of each item in Instagram posts when scrolling looks like this:
 
 ```json
@@ -162,6 +164,7 @@ The structure of each item in Instagram posts when scrolling looks like this:
 ```
 
 ### Scraped Instagram comments
+
 The structure of each item in Instagram comments looks like this:
 
 ```json
@@ -188,6 +191,7 @@ The structure of each item in Instagram comments looks like this:
 ```
 
 ### Scraped Instagram profile
+
 The structure of each user profile looks like this:
 
 ```json
@@ -254,6 +258,7 @@ The structure of each user profile looks like this:
 ```
 
 ### Scraped Instagram hashtag
+
 The structure of each hashtag detail looks like this:
 
 ```json
@@ -302,6 +307,7 @@ The structure of each hashtag detail looks like this:
 ```
 
 ### Scraped Instagram place
+
 The structure of each place detail looks like this:
 
 ```json
@@ -363,6 +369,7 @@ The structure of each place detail looks like this:
 ```
 
 ### Scraped Instagram post details
+
 The structure of each post detail looks like this:
 
 ```json
@@ -441,4 +448,9 @@ You can return fields to achieve three different things:
 This example will add a new field `comment added`, change the `caption` field and remove `displayResourceUrls` field
 
 ## Changelog
+
 This scraper is under active development, so check [CHANGELOG.md](https://github.com/gippy/instagram-scraper/blob/master/CHANGELOG.md) for new features and fixes.
+
+## Acknowledgments
+
+This scraper clicks cookies and privacy consent dialogs in your behalf
