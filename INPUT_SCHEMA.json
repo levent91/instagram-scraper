@@ -193,6 +193,13 @@
             "editor": "checkbox",
             "default": false
         },
+        "debugLog": {
+            "title": "Debug Log",
+            "description": "Enable a more verbose logging to be able to understand what's happening during the scraping",
+            "type": "boolean",
+            "default": false,
+            "editor": "checkbox"
+        },
         "includeHasStories": {
             "title": "Include Has Stories",
             "type": "boolean",

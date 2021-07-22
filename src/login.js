@@ -2,8 +2,8 @@ const Apify = require('apify');
 const Puppeteer = require('puppeteer'); // eslint-disable-line no-unused-vars
 const http = require('http');
 const { acceptCookiesDialog } = require('./helpers');
-const { pleaseOpen, liveView, localhost } = require('./asci-texts.js');
-const { authorize, close } = require('./submit-page.js');
+const { pleaseOpen, liveView, localhost } = require('./asci-texts');
+const { authorize, close } = require('./submit-page');
 
 const { sleep, puppeteer } = Apify.utils;
 
@@ -107,8 +107,7 @@ const login = async (username, password, page) => {
         Apify.utils.log.info('Successfully logged in');
         await Apify.utils.sleep(3000);
     } catch (error) {
-        Apify.utils.log.info('Failed to log in');
-        Apify.utils.log.error(error);
+        Apify.utils.log.exception(error, 'Failed to log in');
 
         // store screenShot in case of failure
         await puppeteer.saveSnapshot(page, {
@@ -121,6 +120,118 @@ const login = async (username, password, page) => {
     }
 };
 
+/**
+ *
+ * @param {{
+ *  loginCookies?: any[] | Array<any[]>,
+ *  maxErrorCount: number,
+ * }} param
+ */
+const loginManager = ({ loginCookies, maxErrorCount }) => {
+    /**
+     * @type {Map<number, { index: number, uses: number, errors: number, cookies: any[] }>}
+     */
+    const logins = new Map();
+
+    if (loginCookies && loginCookies.length > 0) {
+        if (Array.isArray(loginCookies[0])) {
+            loginCookies.forEach((cookies, index) => {
+                logins.set(index, {
+                    index,
+                    uses: 0,
+                    errors: 0,
+                    cookies,
+                });
+            });
+        } else {
+            logins.set(0, {
+                index: 0,
+                uses: 0,
+                errors: 0,
+                cookies: loginCookies,
+            });
+        }
+    }
+
+    return {
+        loginCount() {
+            return logins.size;
+        },
+        /**
+         * @param {Apify.Session} session
+         */
+        hasSession(session) {
+            const { loginIndex } = session.userData;
+            return loginIndex !== undefined && logins.get(loginIndex);
+        },
+        /**
+         * @param {Apify.Session} session
+         */
+        isUsable(session) {
+            const { loginIndex } = session.userData;
+            if (loginIndex === undefined) {
+                return true;
+            }
+            const data = logins.get(loginIndex);
+            if (!data) {
+                return true;
+            }
+            return session.isUsable() && data.errors < maxErrorCount;
+        },
+        /**
+         * @param {Apify.Session} session
+         */
+        decreaseError(session) {
+            const { loginIndex } = session.userData;
+            const l = logins.get(loginIndex);
+            if (!l) {
+                return;
+            }
+
+            if (l.errors > 0) {
+                l.errors--;
+            }
+            l.uses++;
+        },
+        /**
+         * @param {Apify.Session} session
+         */
+        increaseError(session) {
+            const { loginIndex } = session.userData;
+            const l = logins.get(loginIndex);
+            if (!l) {
+                return;
+            }
+            l.errors++;
+            l.uses++;
+        },
+        /**
+         * @param {Puppeteer.Page} page
+         * @param {Apify.Session} session
+         */
+        async setCookie(page, session) {
+            if (!logins.size) {
+                return true;
+            }
+
+            for (const l of logins.values()) {
+                if (l.errors < maxErrorCount) {
+                    await page.setCookie(...l.cookies
+                        .filter((s) => `${s.domain}`.includes('instagram'))
+                        .map((s) => ({ ...s, domain: '.instagram.com' })));
+
+                    session.userData.loginIndex = l.index;
+
+                    return true;
+                }
+            }
+
+            return false;
+        },
+    };
+};
+
 module.exports = {
     login,
+    loginManager,
 };

@@ -1,8 +1,16 @@
+// eslint-disable-next-line no-unused-vars
+const Puppeteer = require('puppeteer');
 const { log, finiteQuery } = require('./helpers');
 const { QUERY_IDS } = require('./query_ids');
 
 const { profileFollowersQueryId } = QUERY_IDS;
 
+/**
+ *
+ * @param {Puppeteer.Page} page
+ * @param {any} itemSpec
+ * @param {any} input
+ */
 async function getProfileFollowedBy(page, itemSpec, input) {
     const limit = input.followedByLimit;
     if (!limit) return undefined;
@@ -27,7 +35,7 @@ async function getProfileFollowedBy(page, itemSpec, input) {
             };
         });
         return { nextPageCursor: endCursor, data: users };
-    }
+    };
 
     const variables = {
         id: itemSpec.userId,
@@ -35,7 +43,15 @@ async function getProfileFollowedBy(page, itemSpec, input) {
         fetch_mutual: false,
     };
 
-    return finiteQuery(profileFollowersQueryId, variables, nodeTransformationFunction, limit, page, input, itemSpec, '[profile followed by]');
+    return finiteQuery(
+        profileFollowersQueryId,
+        variables,
+        nodeTransformationFunction,
+        limit,
+        page,
+        input,
+        '[profile followed by]',
+    );
 }
 
 module.exports = {

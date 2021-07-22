@@ -1,4 +1,6 @@
 const Apify = require('apify');
+// eslint-disable-next-line no-unused-vars
+const Puppeteer = require('puppeteer');
 const { getCheckedVariable, log, finiteScroll, filterPushedItemsAndUpdateState, shouldContinueScrolling } = require('./helpers');
 const { PAGE_TYPES, LOG_TYPES } = require('./consts');
 const { formatSinglePost } = require('./details');
@@ -10,8 +12,10 @@ const initData = {};
 /**
  * Takes type of page and data loaded through GraphQL and outputs
  * correct list of posts based on the page type.
- * @param {String} pageType Type of page we are scraping posts from
- * @param {Object} data GraphQL data
+ * @param {{
+ *   pageType: string,
+ *   data: Record<string, any>
+ * }} params
  */
 const getPostsFromGraphQL = ({ pageType, data }) => {
     let timeline;
@@ -36,8 +40,8 @@ const getPostsFromGraphQL = ({ pageType, data }) => {
 /**
  * Takes type of page and it's initial loaded data and outputs
  * correct list of posts based on the page type.
- * @param {String} pageType Type of page we are scraping posts from
- * @param {Object} data GraphQL data
+ * @param {string} pageType Type of page we are scraping posts from
+ * @param {Record<string, any>} data GraphQL data
  */
 const getPostsFromEntryData = (pageType, data) => {
     let pageData;
@@ -58,6 +62,12 @@ const getPostsFromEntryData = (pageType, data) => {
     return getPostsFromGraphQL({ pageType, data: pageData[0].graphql });
 };
 
+/**
+ * @param {Apify.Request} request
+ * @param {any} itemSpec
+ * @param {any} entryData
+ * @param {any} additionalData
+ */
 const scrapePost = (request, itemSpec, entryData, additionalData) => {
     const item = (() => {
         try {
@@ -88,13 +98,15 @@ const scrapePost = (request, itemSpec, entryData, additionalData) => {
 
 /**
  * Takes data from entry data and from loaded xhr requests and parses them into final output.
- * @param {Object} page Puppeteer Page object
- * @param {Object} request Apify Request object
- * @param {Object} itemSpec Parsed page data
- * @param {Object} entryData data from window._shared_data.entry_data
- * @param {Object} input Input provided by user
+ * @param {{
+ *   page: Puppeteer.Page,
+ *   itemSpec: any,
+ *   entryData: Record<string, any>,
+ *   scrollingState: Record<string, any>
+ *   extendOutputFunction: (data: any, meta: any) => Promise<void>,
+ * }} params
  */
-const scrapePosts = async ({ page, itemSpec, entryData, scrollingState, session }) => {
+const scrapePosts = async ({ page, itemSpec, entryData, scrollingState, extendOutputFunction }) => {
     const timeline = getPostsFromEntryData(itemSpec.pageType, entryData);
     initData[itemSpec.id] = timeline;
 
@@ -140,8 +152,10 @@ const scrapePosts = async ({ page, itemSpec, entryData, scrollingState, session 
             scrollingState[itemSpec.id].lastPostDate = postsReadyToPush[postsReadyToPush.length - 1].timestamp;
         }
 
-        log(page.itemSpec, `${timeline.posts.length} posts loaded, ${Object.keys(scrollingState[itemSpec.id].ids).length}/${timeline.postsCount} posts scraped`);
-        await Apify.pushData(postsReadyToPush);
+        log(itemSpec, `${timeline.posts.length} posts loaded, ${Object.keys(scrollingState[itemSpec.id].ids).length}/${timeline.postsCount} posts scraped`);
+        await extendOutputFunction(postsReadyToPush, {
+            label: 'post',
+        });
     } else {
         log(itemSpec, 'Waiting for initial data to load');
         while (!initData[itemSpec.id]) await sleep(100);
@@ -158,7 +172,6 @@ const scrapePosts = async ({ page, itemSpec, entryData, scrollingState, session 
     const isUnloggedPlace = itemSpec.pageType === PAGE_TYPES.PLACE && !itemSpec.input.loginCookies;
     if (isUnloggedPlace) {
         log(itemSpec, 'Place/location pages allow scrolling only under login, collecting initial posts and finishing', LOG_TYPES.WARNING);
-        session.retire();
         return;
     }
 
@@ -173,24 +186,26 @@ const scrapePosts = async ({ page, itemSpec, entryData, scrollingState, session 
                 scrollingState,
                 getItemsFromGraphQLFn: getPostsFromGraphQL,
                 type: 'posts',
-                session,
             });
         }
     } else {
         // We have to forcefully close the browser here because it hangs sometimes for some listeners reasons
         // Because we always have max one page per browser, this is fine
-        console.log(`Puppeteer retire posts.js line 176`);
-        await session.retire();
+        // console.log(`Puppeteer retire posts.js line 176`);
     }
 };
 
 /**
  * Catches GraphQL responses and if they contain post data, it stores the data
  * to the global variable.
- * @param {Object} page Puppeteer Page object
- * @param {Object} response Puppeteer Response object
+ * @param {{
+ *   page: Puppeteer.Page,
+ *   response: Puppeteer.HTTPResponse,
+ *   scrollingState: any,
+ *   extendOutputFunction: (data: any, meta: any) => Promise<void>,
+ * }} params
  */
-async function handlePostsGraphQLResponse({ page, response, scrollingState }) {
+async function handlePostsGraphQLResponse({ page, response, scrollingState, extendOutputFunction }) {
     const responseUrl = response.url();
 
     const { itemSpec } = page;
@@ -229,7 +244,9 @@ async function handlePostsGraphQLResponse({ page, response, scrollingState }) {
     }
 
     log(itemSpec, `${timeline.posts.length} posts loaded, ${Object.keys(scrollingState[itemSpec.id].ids).length}/${timeline.postsCount} posts scraped`);
-    await Apify.pushData(postsReadyToPush);
+    await extendOutputFunction(postsReadyToPush, {
+        label: 'post',
+    });
 }
 
 function parsePostsForOutput(posts, itemSpec, currentScrollingPosition) {

@@ -1,7 +1,11 @@
 {
-	"name": "instagram-scraper",
-	"version": "0.0",
-	"buildTag": "latest",
-	"env": { "npm_config_loglevel": "silent" },
-	"template": "puppeteer_crawler"
+    "name": "instagram-scraper",
+    "version": "0.0",
+    "buildTag": "latest",
+    "env": {
+        "npm_config_loglevel": "silent",
+        "ASBD": "437806",
+        "APP_ID": "936619743392459"
+    },
+    "template": "puppeteer_crawler"
 }

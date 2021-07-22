@@ -5,7 +5,7 @@ module.exports = {
         INFO: 'info',
         WARNING: 'warning',
         ERROR: 'error',
-        EXCEPTION: 'exception'
+        EXCEPTION: 'exception',
     },
     // Types of pages which this actor is able to process
     PAGE_TYPES: {
@@ -30,14 +30,14 @@ module.exports = {
         HASHTAG: 'hashtag',
     },
     PAGE_TYPE_URL_REGEXES: {
-        PLACE: /https:\/\/www\.instagram\.com\/explore\/locations\/.+/u,
-        PROFILE: /https:\/\/www\.instagram\.com\/[^/]{2,}\/?$/u,
-        HASHTAG: /https:\/\/www\.instagram\.com\/explore\/tags\/.+/u,
-        POST: /https:\/\/www\.instagram\.com\/p\/.+/u,
-        STORY: /https:\/\/www\.instagram\.com\/stories\/.+/u,
+        PLACE: /https:\/\/(www\.)?instagram\.com\/explore\/locations\/.+/u,
+        PROFILE: /https:\/\/(www\.)?instagram\.com\/[^/]{2,}\/?$/u,
+        HASHTAG: /https:\/\/(www\.)?instagram\.com\/explore\/tags\/.+/u,
+        POST: /https:\/\/(www\.)?instagram\.com\/p\/.+/u,
+        STORY: /https:\/\/(www\.)?instagram\.com\/stories\/.+/u,
     },
     // Instagrams GraphQL Endpoint URL
-    GRAPHQL_ENDPOINT: 'https://www.instagram.com/graphql/query/?query_hash=',
+    GRAPHQL_ENDPOINT: 'https://www.instagram.com/graphql/query/',
     // Resource types blocked from loading to speed up the solution
     ABORT_RESOURCE_TYPES: [
         'image',
@@ -66,17 +66,6 @@ module.exports = {
         'es6/PostComment',
         'es6/en',
         'es6/Vendor',
-        'es6/ActivityFeedBox'
+        'es6/ActivityFeedBox',
     ],
-    HEADERS: {
-        "access-control-expose-headers": 'X-IG-Set-WWW-Claim',
-        accept: '*/*',
-        'accept-encoding': 'gzip, deflate, br',
-        'sec-fetch-dest': 'empty',
-        'sec-fetch-mode': 'cors',
-        'sec-fetch-site': 'same-origin',
-        'x-ig-app-id': '936619743392459',
-        'x-ig-www-claim': 'hmac.AR1-yiYTI0KAovABgcl_mYe5lSWZC3Jtjc8gMfXTp8Z2t6gQ',
-        'x-requested-with': 'XMLHttpRequest',
-    }
 };

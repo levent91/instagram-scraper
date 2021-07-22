@@ -1,16 +1,62 @@
 const Apify = require('apify');
-const tunnel = require('tunnel');
-const { CookieJar } = require('tough-cookie');
-const got = require('got');
 const vm = require('vm');
-const { URLSearchParams } = require('url');
 const Puppeteer = require('puppeteer'); // eslint-disable-line no-unused-vars
-const get = require('lodash.get');
+const { get } = require('lodash');
 const errors = require('./errors');
 const { expandOwnerDetails } = require('./user-details');
-const { PAGE_TYPES, GRAPHQL_ENDPOINT, LOG_TYPES, PAGE_TYPE_URL_REGEXES, HEADERS } = require('./consts');
+const { PAGE_TYPES, GRAPHQL_ENDPOINT, LOG_TYPES, PAGE_TYPE_URL_REGEXES } = require('./consts');
 
 const { sleep, requestAsBrowser } = Apify.utils;
+
+/**
+ * @param {{
+ *   hash: string,
+ *   variables: Record<string, any>
+ * }} params
+ */
+const queryHash = ({
+    hash,
+    variables,
+}) => {
+    return new URLSearchParams([
+        ['query_hash', hash],
+        ['variables', JSON.stringify(variables)],
+    ]);
+};
+
+/**
+ * @param {{
+ *   proxyConfiguration?: Apify.ProxyConfiguration,
+ * }} params
+ */
+const createGotRequester = ({ proxyConfiguration }) => {
+    /**
+     * @param {{
+     *   url: string,
+     *   session?: Apify.Session,
+     *   headers?: Record<string, any>,
+     *   method?: 'GET' | 'POST',
+     *   proxyUrl?: string
+     * }} params
+     */
+    return async ({
+        url,
+        session,
+        proxyUrl = proxyConfiguration?.newUrl(session?.id ?? `sess${Math.round(Math.random() * 10000)}`),
+        headers,
+        method = 'GET',
+    }) => {
+        return requestAsBrowser({
+            url,
+            json: true,
+            method,
+            abortFunction: () => false,
+            proxyUrl,
+            headers,
+            ignoreSslErrors: true,
+        });
+    };
+};
 
 /**
  * @param {Array<{ obj: any, paths: string[] }>} objs
@@ -106,7 +152,7 @@ const getItemSpec = (entryData, additionalData) => {
 
 /**
  * Takes page data containing type of page and outputs short label for log line
- * @param {Object} pageData Object representing currently loaded IG page
+ * @param {Record<string, any>} pageData Object representing currently loaded IG page
  */
 const getLogLabel = (pageData) => {
     switch (pageData.pageType) {
@@ -146,78 +192,64 @@ const getCheckedVariable = (pageType) => {
 
 /**
  * Based on parsed data from current page saves a message into log with prefix identifying current page
- * @param {Object} pageData Parsed page data
- * @param {String} message Message to be outputed
+ * @param {any} itemSpec
+ * @param {string} message
+ * @param {string} type
  */
-function log(itemSpec, message, type = 'info') {
+function log(itemSpec, message, type = LOG_TYPES.INFO) {
     const label = getLogLabel(itemSpec);
     Apify.utils.log[type](`${label}: ${message}`);
 }
 
-const grapqlEndpoint = 'https://www.instagram.com/graphql/query/';
-
 /**
+ * @param {string} url
  * @param {Puppeteer.Page} page
- * @param {{ proxy: import("apify").ProxyConfigurationOptions | undefined; } | undefined} [input]
+ * @param {(data: any) => any} nodeTransformationFunc
+ * @param {any} itemSpec
+ * @param {string} logPrefix
+ * @param {boolean} [isData]
  */
-async function getGotParams(page, input) {
-    // It is necessary to create it here as well because passing it over is to ridiculous
-    const proxyConfiguration = await Apify.createProxyConfiguration(input.proxy);
-
-    if (!proxyConfiguration) {
-        return;
-    }
-    const proxyUrl = proxyConfiguration.newUrl();
-
-    const userAgent = await page.browser().userAgent();
-
-    const proxyUrlParts = proxyUrl.match(/http:\/\/(.*)@(.*)\/?/);
-    if (!proxyUrlParts) return;
-
-    const proxyHost = proxyUrlParts[2].split(':');
-    const proxyConfig = {
-        hostname: proxyHost[0],
-        proxyAuth: proxyUrlParts[1],
-    };
-    if (proxyHost[1]) proxyConfig.port = proxyHost[1];
-
-    const agent = tunnel.httpsOverHttp({
-        proxy: proxyConfig,
-    });
-
-    const cookies = await page.cookies();
-    const cookieJar = new CookieJar();
-    cookies.forEach((cookie) => {
-        if (cookie.name === 'urlgen') return;
-        cookieJar.setCookieSync(`${cookie.name}=${cookie.value}`, 'https://www.instagram.com/', {
-            http: true,
-            secure: true,
-        });
-    });
-
-    return {
-        agent,
-        cookieJar,
-        headers: {
-            'user-agent': userAgent,
-        },
-        json: true,
-    };
-}
-
-async function query(gotParams, searchParams, nodeTransformationFunc, itemSpec, logPrefix) {
+async function query(
+    url,
+    page,
+    nodeTransformationFunc,
+    itemSpec,
+    logPrefix,
+    isData = true,
+) {
     let retries = 0;
     while (retries < 10) {
         try {
-            const { body } = await got(`${grapqlEndpoint}?${searchParams.toString()}`, gotParams);
-            if (!body.data) throw new Error(`${logPrefix} - GraphQL query does not contain data`);
-            return nodeTransformationFunc(body.data);
+            const body = await page.evaluate(async ({ url, APP_ID, ASBD }) => {
+                return fetch(url, {
+                    headers: {
+                        'user-agent': window.navigator.userAgent,
+                        accept: '*/*',
+                        'accept-language': `${window.navigator.language};q=0.7`,
+                        'x-csrftoken':
+                            window._sharedData?.config?.csrf_token
+                            ?? window.__initialData?.data?.config.csrf_token,
+                        'x-asbd-id': ASBD,
+                        'x-ig-app-id': APP_ID,
+                        'x-requested-with': 'XMLHttpRequest',
+                    },
+                    referrer: window.location.href,
+                    credentials: 'include',
+                    mode: 'cors',
+                }).then((res) => res.json());
+            }, {
+                url,
+                APP_ID: process.env.APP_ID,
+                ASBD: process.env.ASBD,
+            });
+            if (isData && !body?.data) throw new Error(`${logPrefix} - GraphQL query does not contain data`);
+            return nodeTransformationFunc(isData ? body.data : body);
         } catch (error) {
             if (error.message.includes(429)) {
                 log(itemSpec, `${logPrefix} - Encountered rate limit error, waiting ${(retries + 1) * 10} seconds.`, LOG_TYPES.WARNING);
                 await sleep((retries + 1) * 10000);
             } else {
-                Apify.utils.log.error(error);
+                Apify.utils.log.exception(error, 'query', { url });
             }
             retries++;
         }
@@ -226,24 +258,38 @@ async function query(gotParams, searchParams, nodeTransformationFunc, itemSpec, 
     return { nextPageCursor: null, data: [] };
 }
 
-async function finiteQuery(queryId, variables, nodeTransformationFunc, limit, page, input, itemSpec, logPrefix) {
-    const gotParams = await getGotParams(page, input);
-
+/**
+ *
+ * @param {string} hash
+ * @param {Record<string, any>} variables
+ * @param {(data: any) => any} nodeTransformationFunc
+ * @param {number} limit
+ * @param {Puppeteer.Page} page
+ * @param {any} itemSpec
+ * @param {string} logPrefix
+ */
+async function finiteQuery(hash, variables, nodeTransformationFunc, limit, page, itemSpec, logPrefix) {
     log(itemSpec, `${logPrefix} - Loading up to ${limit} items`);
     let hasNextPage = true;
     let endCursor = null;
+    /** @type {any[]} */
     const results = [];
     while (hasNextPage && results.length < limit) {
         const queryParams = {
-            query_hash: queryId,
+            hash,
             variables: {
                 ...variables,
                 first: 50,
             },
         };
         if (endCursor) queryParams.variables.after = endCursor;
-        const searchParams = new URLSearchParams([['query_hash', queryParams.query_hash], ['variables', JSON.stringify(queryParams.variables)]]);
-        const { nextPageCursor, data } = await query(gotParams, searchParams, nodeTransformationFunc, itemSpec, logPrefix);
+        const { nextPageCursor, data } = await query(
+            `${GRAPHQL_ENDPOINT}?${queryHash(queryParams)}`,
+            page,
+            nodeTransformationFunc,
+            itemSpec,
+            logPrefix,
+        );
 
         data.forEach((result) => results.push(result));
 
@@ -258,10 +304,22 @@ async function finiteQuery(queryId, variables, nodeTransformationFunc, limit, pa
     return results.slice(0, limit);
 }
 
-async function singleQuery(queryId, variables, nodeTransformationFunc, page, itemSpec, logPrefix) {
-    const gotParams = await getGotParams(page, itemSpec.input);
-    const searchParams = new URLSearchParams([['query_hash', queryId], ['variables', JSON.stringify(variables)]]);
-    return query(gotParams, searchParams, nodeTransformationFunc, itemSpec, logPrefix);
+/**
+ * @param {string} hash
+ * @param {Record<string,any>} variables
+ * @param {(data: any) => any} nodeTransformationFunc
+ * @param {Puppeteer.Page} page
+ * @param {any} itemSpec
+ * @param {string} logPrefix
+ */
+async function singleQuery(hash, variables, nodeTransformationFunc, page, itemSpec, logPrefix) {
+    return query(
+        `${GRAPHQL_ENDPOINT}?${queryHash({ hash, variables })}`,
+        page,
+        nodeTransformationFunc,
+        itemSpec,
+        logPrefix,
+    );
 }
 
 /**
@@ -286,7 +344,7 @@ function hasReachedLastPostDate(scrapePostsUntilDate, lastPostDate, itemSpec) {
     if (scrapePostsUntilDate) {
         // We want to continue scraping (return true) if the scrapePostsUntilDate is older (smaller) than the date of the last post
         // Don't forget we scrape from the most recent ones to the past
-        scrapePostsUntilDateAsDate = new Date(scrapePostsUntilDate);
+        const scrapePostsUntilDateAsDate = new Date(scrapePostsUntilDate);
         const willContinue = scrapePostsUntilDateAsDate < lastPostDateAsDate;
         if (!willContinue) {
             log(itemSpec, `Reached post with older date than our limit: ${lastPostDateAsDate}. Finishing scrolling...`, LOG_TYPES.WARNING);
@@ -296,7 +354,16 @@ function hasReachedLastPostDate(scrapePostsUntilDate, lastPostDate, itemSpec) {
     return false;
 }
 
-// Ttems can be posts or commets from scrolling
+/**
+ * @param {{
+ *   items: any[],
+ *   itemSpec: any,
+ *   parsingFn: (items: any[], itemSpec: any, position: number) => any[],
+ *   scrollingState: Record<string, any>,
+ *   type: 'posts' | 'comments',
+ *   page: Puppeteer.Page,
+ * }} param0
+ */
 async function filterPushedItemsAndUpdateState({ items, itemSpec, parsingFn, scrollingState, type, page }) {
     if (!scrollingState[itemSpec.id]) {
         scrollingState[itemSpec.id] = {
@@ -485,7 +552,7 @@ const loadMore = async ({ itemSpec, page, retry = 0, type }) => {
 
             if (status !== 200) {
                 // usually 302 redirecting to login, throwing string to remove the long stack trace
-                throw `Got error status while scrolling: ${status}. Retrying...`;
+                throw new Error(`Got error status while scrolling: ${status}. Retrying...`);
             }
 
             let json;
@@ -533,6 +600,15 @@ const loadMore = async ({ itemSpec, page, retry = 0, type }) => {
     return { data };
 };
 
+/**
+ * @param {{
+ *   itemSpec: any,
+ *   page: Puppeteer.Page,
+ *   scrollingState: any,
+ *   getItemsFromGraphQLFn: (...args: any) => Record<any, any>,
+ *   type: 'posts' | 'comments',
+ * }} context
+ */
 const finiteScroll = async (context) => {
     const {
         itemSpec,
@@ -540,7 +616,6 @@ const finiteScroll = async (context) => {
         scrollingState,
         getItemsFromGraphQLFn,
         type,
-        session,
     } = context;
     // console.log('starting finite scroll');
     const oldItemCount = Object.keys(scrollingState[itemSpec.id].ids).length;
@@ -557,9 +632,6 @@ const finiteScroll = async (context) => {
         if (!hasNextPage) {
             // log(itemSpec, 'Cannot find new page of scrolling, storing last page dump to KV store', LOG_TYPES.WARNING);
             // await Apify.setValue(`LAST-PAGE-DUMP-${itemSpec.id}`, data);
-            // We have to do these retires because the browser sometimes hang on, should be fixable with something else though
-            session.retire();
-
             // this is actually expected, the total count usually isn't the amount of actual loaded comments/posts
             return;
         }
@@ -589,41 +661,6 @@ const finiteScroll = async (context) => {
     if (doContinue) {
         await finiteScroll(context);
     }
-};
-
-/**
- * Load data from XHR request using current page cookies and headers
- * @param {{
- *   request: Apify.Request,
- *   page: Puppeteer.Page,
- *   url: string,
- *   proxyUrl?: string,
- *   csrf_token: string
- * }} params
- */
-const loadXHR = async ({ request, page, url, proxyUrl, csrf_token }) => {
-    const cookies = await page.cookies();
-    let serializedCookies = '';
-    for (const cookie of cookies) {
-        serializedCookies += `${cookie.name}=${cookie.value}; `;
-    }
-    const userAgent = await page.evaluate(() => navigator.userAgent);
-    const headers = {
-        referer: request.url,
-        'x-csrftoken': csrf_token,
-        cookie: serializedCookies,
-        'user-agent': userAgent,
-        ...HEADERS,
-    };
-
-    const res = await requestAsBrowser({
-        url,
-        timeoutSecs: 30,
-        proxyUrl,
-        headers,
-    });
-
-    return res;
 };
 
 /**
@@ -755,11 +792,71 @@ const extendFunction = async ({
     };
 };
 
+/**
+ * Do a generic check when using Apify Proxy
+ *
+ * @typedef params
+ * @property {any} [params.proxyConfig] Provided apify proxy configuration
+ * @property {boolean} [params.required] Make the proxy usage required when running on the platform
+ * @property {string[]} [params.blacklist] Blacklist of proxy groups, by default it's ['GOOGLE_SERP']
+ * @property {boolean} [params.force] By default, it only do the checks on the platform. Force checking regardless where it's running
+ * @property {string[]} [params.hint] Hint specific proxy groups that should be used, like SHADER or RESIDENTIAL
+ *
+ * @param {params} params
+ * @returns {Promise<Apify.ProxyConfiguration | undefined>}
+ */
+const proxyConfiguration = async ({
+    proxyConfig,
+    required = true,
+    force = Apify.isAtHome(),
+    blacklist = ['GOOGLESERP'],
+    hint = [],
+}) => {
+    const configuration = await Apify.createProxyConfiguration(proxyConfig);
+
+    // this works for custom proxyUrls
+    if (Apify.isAtHome() && required) {
+        if (!configuration || (!configuration.usesApifyProxy && (!configuration.proxyUrls || !configuration.proxyUrls.length)) || !configuration.newUrl()) {
+            throw new Error('\n=======\nYou must use Apify proxy or custom proxy URLs\n\n=======');
+        }
+    }
+
+    // check when running on the platform by default
+    if (force) {
+        // only when actually using Apify proxy it needs to be checked for the groups
+        if (configuration && configuration.usesApifyProxy) {
+            if (blacklist.some((blacklisted) => (configuration.groups || []).includes(blacklisted))) {
+                throw new Error(`\n=======\nThese proxy groups cannot be used in this actor. Choose other group or contact support@apify.com to give you proxy trial:\n\n*  ${blacklist.join('\n*  ')}\n\n=======`);
+            }
+
+            // specific non-automatic proxy groups like RESIDENTIAL, not an error, just a hint
+            if (hint.length && !hint.some((group) => (configuration.groups || []).includes(group))) {
+                Apify.utils.log.info(`\n=======\nYou can pick specific proxy groups for better experience:\n\n*  ${hint.join('\n*  ')}\n\n=======`);
+            }
+        }
+    }
+
+    return configuration;
+};
+
+/**
+ * @param {Apify.BrowserCrawler} crawler
+ */
+const patchLog = (crawler) => {
+    const originalException = crawler.log.exception.bind(crawler.log);
+    crawler.log.exception = (...args) => {
+        if (!args?.[1]?.includes('handleRequestFunction')) {
+            originalException(...args);
+        }
+    };
+};
+
 module.exports = {
     getPageTypeFromUrl,
     getItemSpec,
     getCheckedVariable,
     log,
+    query,
     finiteQuery,
     acceptCookiesDialog,
     singleQuery,
@@ -768,6 +865,8 @@ module.exports = {
     filterPushedItemsAndUpdateState,
     finiteScroll,
     shouldContinueScrolling,
-    loadXHR,
     coalesce,
+    proxyConfiguration,
+    createGotRequester,
+    patchLog,
 };

@@ -1,3 +1,5 @@
+// eslint-disable-next-line no-unused-vars
+const Puppeteer = require('puppeteer');
 const Apify = require('apify');
 const { QUERY_IDS } = require('./query_ids');
 
@@ -7,6 +9,11 @@ const { postQueryId } = QUERY_IDS;
 
 const users = {};
 
+/**
+ * @param {any[]} posts
+ * @param {Puppeteer.Page} page
+ * @param {any} itemSpec
+ */
 async function expandOwnerDetails(posts, page, itemSpec) {
     // We have to require it here because of circular dependency
     const { log, singleQuery } = require('./helpers');
@@ -20,6 +27,7 @@ async function expandOwnerDetails(posts, page, itemSpec) {
         log(itemSpec, `Owner details - Expanding owner details of post ${i + 1}/${posts.length}`);
         if (!posts[i].ownerId) {
             transformedPosts.push(posts[i]);
+            // eslint-disable-next-line no-continue
             continue;
         }
         const newPost = { ...posts[i] };
@@ -27,6 +35,7 @@ async function expandOwnerDetails(posts, page, itemSpec) {
             newPost.ownerUsername = users[posts[i].ownerId].username;
             newPost.owner = users[posts[i].ownerId];
             transformedPosts.push(newPost);
+            // eslint-disable-next-line no-continue
             continue;
         }
         const owner = await singleQuery(

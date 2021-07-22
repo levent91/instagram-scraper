@@ -1,8 +1,7 @@
-const pCss = `color: #9fa5a9; line-height: 20px!important; text-align: center; font-family: Graphik,sans-serif;`
-const inputCss = `padding-left: 40px; cursor: pointer; font-size: 13px;font-weight: 700;color: #fff;background-color: #5cb85c;border-color: #4cae4c;text-align: center;vertical-align: middle;touch-action: manipulation;padding: 10px 20px;border-radius: 3px;line-height: 1.42857; border: 1px solid transparent;`
+const pCss = `color: #9fa5a9; line-height: 20px!important; text-align: center; font-family: Graphik,sans-serif;`;
+const inputCss = `padding-left: 40px; cursor: pointer; font-size: 13px;font-weight: 700;color: #fff;background-color: #5cb85c;border-color: #4cae4c;text-align: center;vertical-align: middle;touch-action: manipulation;padding: 10px 20px;border-radius: 3px;line-height: 1.42857; border: 1px solid transparent;`;
 
-module.exports.authorize = () =>
-    `<!DOCTYPE html>
+module.exports.authorize = () => `<!DOCTYPE html>
 <html>
   <head>
     <meta charset="UTF-8">
@@ -15,10 +14,9 @@ module.exports.authorize = () =>
       <input type="submit" style="${inputCss}"/>
     </form>
   </body>
-</html>`
+</html>`;
 
-module.exports.close = () =>
-    `<!DOCTYPE html>
+module.exports.close = () => `<!DOCTYPE html>
 <html>
   <head>
     <meta charset="UTF-8">
@@ -27,4 +25,4 @@ module.exports.close = () =>
   <body>
     <p style="${pCss} margin-top: 200px;"> You are now authorized, your actor should finish in seconds. </p>
   </body>
-</html>`
+</html>`;
