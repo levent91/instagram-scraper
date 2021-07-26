@@ -11,7 +11,6 @@ module.exports = {
     searchTypeIsRequired: () => new Error(`When "query" parameter is provided, searchType parameter must be one of "${Object.values(SEARCH_TYPES).join('", "')}"`),
     unsupportedSearchType: (type) => new Error(`Type "${type}" is not supported. Allowed types are "${Object.values(SEARCH_TYPES).join('", "')}"`),
     notPostPage: () => new Error('Comments can only be loaded from posts detail page.'),
-    credentialsRequired: () => new Error('You need to provide login credentials.'),
     loginResultType: () => new Error('When using login and password, you need to set the "What to scrape from each page" setting to "Cookies".'),
     cookiesNotArray: () => new Error('Login cookies has to be either Array of cookies or Array of Arrays of cookies.'),
     xhrNotLoaded: () => new Error('Required XHR request not loaded.'),

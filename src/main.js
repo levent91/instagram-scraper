@@ -75,7 +75,6 @@ Apify.main(async () => {
         if (Apify.isAtHome() && !proxyConfiguration) throw errors.proxyIsRequired();
         if (!resultsType) throw errors.typeIsRequired();
         if (!Object.values(SCRAPE_TYPES).includes(resultsType)) throw errors.unsupportedType(resultsType);
-        if (SCRAPE_TYPES.COOKIES === resultsType && (!loginUsername || !loginPassword)) throw errors.credentialsRequired();
         if (loginUsername && loginPassword && SCRAPE_TYPES.COOKIES !== resultsType) {
             Apify.utils.log.warning('You provided username and password but will be ignored');
         }
@@ -89,7 +88,7 @@ Apify.main(async () => {
         process.exit(1);
     }
 
-    if (proxyConfiguration && !proxyConfiguration?.groups?.includes('RESIDENTIAL')) {
+    if (!logins.loginCount() && proxyConfiguration && !proxyConfiguration?.groups?.includes('RESIDENTIAL')) {
         Apify.utils.log.warning(`--------
         You are using Apify proxy but not the RESIDENTIAL group! It is very likely it will not work properly.
         Please contact support@apify.com for access to residential proxy.
@@ -101,10 +100,18 @@ Apify.main(async () => {
     });
 
     let urls;
-    if (Array.isArray(directUrls) && directUrls.length > 0) {
+    if (resultsType === SCRAPE_TYPES.COOKIES) {
+        if (loginUsername && loginPassword) {
+            log.info('Will extract login information from username/password');
+            urls = ['https://instagram.com'];
+        } else {
+            throw new Error('Result type is set to Cookies, but no username and password were provided');
+        }
+    } else if (Array.isArray(directUrls) && directUrls.length > 0) {
         Apify.utils.log.warning('Search is disabled when Direct URLs are used');
         urls = directUrls;
-    } else {
+    } else if (resultsType !== SCRAPE_TYPES.COOKIES) {
+        // don't search when doing cookies
         urls = await searchUrls(input, doRequest);
     }
 
