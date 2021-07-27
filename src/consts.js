@@ -38,6 +38,7 @@ module.exports = {
     },
     // Instagrams GraphQL Endpoint URL
     GRAPHQL_ENDPOINT: 'https://www.instagram.com/graphql/query/',
+    V1_ENDPOINT: 'https://i.instagram.com/api/v1',
     // Resource types blocked from loading to speed up the solution
     ABORT_RESOURCE_TYPES: [
         'image',

@@ -1,8 +1,9 @@
 const Apify = require('apify');
 const Puppeteer = require('puppeteer'); // eslint-disable-line no-unused-vars
-const { query } = require('./helpers');
+const { singleQuery } = require('./helpers');
 
 const { storiesNotLoaded } = require('./errors');
+const { QUERY_IDS } = require('./query_ids');
 
 /**
  * Takes type of page and data loaded through GraphQL and outputs
@@ -29,27 +30,43 @@ const getStoriesFromGraphQL = (data) => {
  * @returns {Promise<void>}
  */
 const scrapeStories = async ({ request, page, data, extendOutputFunction }) => {
-    if (!data.entry_data.StoriesPage) {
+    const { itemSpec } = page;
+    const reelId = data?.entry_data?.ProfilePage?.[0]?.graphql?.user?.id
+        ?? data?.entry_data?.StoriesPage?.[0]?.user?.id;
+
+    if (!reelId) {
         Apify.utils.log.warning(`No stories for ${request.url}`);
         return;
     }
-    const { itemSpec } = page;
-    const reelId = data.entry_data.StoriesPage[0].user.id;
 
-    const response = await query(
-        `https://i.instagram.com/api/v1/feed/reels_media/?reel_ids=${reelId}`,
-        page,
+    const response = await singleQuery(
+        QUERY_IDS.profileStories,
+        {
+            reel_ids: [reelId],
+            tag_names: [],
+            location_ids: [],
+            highlight_reel_ids: [],
+            precomposed_overlay: false,
+            show_story_viewer_list: true,
+            story_viewer_fetch_count: 50,
+            story_viewer_cursor: '',
+            stories_video_dash_manifest: false,
+        },
         (d) => d,
+        page,
         itemSpec,
         'Stories',
-        false,
     );
 
     const timeline = getStoriesFromGraphQL(response);
 
-    if (timeline) {
-        Apify.utils.log.info(`Scraped ${timeline.storiesCount} stories`);
-        await extendOutputFunction(timeline.stories, {
+    if (timeline?.stories) {
+        const storyId = request.url.match(/\/stories\/[^/]+\/(\d+)\//);
+        const stories = timeline.stories.filter(({ id }) => (storyId?.[1] ? id === storyId?.[1] : true));
+
+        Apify.utils.log.info(`Scraped ${stories.length}/${timeline.storiesCount} stories from ${request.url}`);
+
+        await extendOutputFunction(stories, {
             label: 'stories',
         });
     } else {

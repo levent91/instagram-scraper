@@ -11,7 +11,7 @@ const helpers = require('./helpers');
 
 const { getItemSpec, getPageTypeFromUrl, extendFunction } = helpers;
 const { GRAPHQL_ENDPOINT, ABORT_RESOURCE_TYPES, ABORT_RESOURCE_URL_INCLUDES, SCRAPE_TYPES,
-    ABORT_RESOURCE_URL_DOWNLOAD_JS, PAGE_TYPES } = require('./consts');
+    ABORT_RESOURCE_URL_DOWNLOAD_JS, PAGE_TYPES, V1_ENDPOINT } = require('./consts');
 const errors = require('./errors');
 const { login, loginManager } = require('./login');
 
@@ -127,8 +127,7 @@ Apify.main(async () => {
     console.dir(requestListSources);
 
     if (requestListSources.length === 0) {
-        Apify.utils.log.info('No URLs to process');
-        process.exit(0);
+        throw new Error('No URLs to process');
     }
 
     const requestQueue = await Apify.openRequestQueue();
@@ -179,7 +178,9 @@ Apify.main(async () => {
         requestQueue,
         persistCookiesPerSession: true,
         useSessionPool: true,
-        preNavigationHooks: [async ({ request, page, session }) => {
+        preNavigationHooks: [async ({ request, page, session }, gotoOptions) => {
+            gotoOptions.waitUntil = 'domcontentloaded';
+
             await page.setBypassCSP(true);
 
             if (loginUsername && loginPassword && resultsType === SCRAPE_TYPES.COOKIES) {
@@ -209,9 +210,10 @@ Apify.main(async () => {
                 return;
             }
 
-            if (!await logins.setCookie(page, session)) {
+            if (!(await logins.setCookie(page, session))) {
                 Apify.utils.log.error('No login cookies available.');
-                process.exit(1);
+                await crawler.autoscaledPool?.abort();
+                return;
             }
 
             if (!checkProxyIp) {
@@ -226,6 +228,62 @@ Apify.main(async () => {
                     extraUrlPatterns: ABORT_RESOURCE_URL_INCLUDES,
                 });
             }
+
+            // make sure the post page don't scroll outside when scrolling for comments,
+            // otherwise it will hang forever. place the additionalData back
+            await page.evaluateOnNewDocument((pageType) => {
+                window.addEventListener('load', () => {
+                    let loaded = false;
+                    let tries = 0;
+
+                    const patched = (path, data) => {
+                        loaded = true;
+                        window.__additionalData = {
+                            [path]: { data },
+                        };
+                    };
+
+                    const patch = () => {
+                        for (const script of document.querySelectorAll('script')) {
+                            if (script.innerHTML.includes('window.__additionalDataLoaded(')) {
+                                try {
+                                    window.__additionalDataLoaded = patched;
+                                    window.eval(script.innerHTML);
+                                } catch (e) {}
+                            }
+                        }
+
+                        if (!loaded && tries++ < 30) {
+                            setTimeout(patch, 300);
+                        }
+                    };
+
+                    setTimeout(patch);
+
+                    const closeModal = () => {
+                        document.body.style.overflow = 'auto';
+
+                        const cookieModalButton = document.querySelectorAll('[role="presentation"] [role="dialog"] button:first-of-type');
+
+                        if (cookieModalButton.length) {
+                            for (const button of cookieModalButton) {
+                                if (!button.closest('#loginForm')) {
+                                    button.click();
+                                } else {
+                                    const loginModal = button.closest('[role="presentation"]');
+                                    if (loginModal) {
+                                        loginModal.remove();
+                                    }
+                                }
+                            }
+                        } else {
+                            setTimeout(closeModal, 1000);
+                        }
+                    };
+
+                    setTimeout(closeModal, 3000);
+                });
+            }, request.userData.pageType);
 
             // Request interception disables chromium cache, implement in-memory cache for
             // resources, will save literal MBs of traffic https://help.apify.com/en/articles/2424032-cache-responses-in-puppeteer
@@ -264,68 +322,73 @@ Apify.main(async () => {
                 await memoryCache(page);
             }
 
+            let waitingTries = 1000;
+
             page.on('response', async (response) => {
-                const responseUrl = response.url();
-
-                // Skip non graphql responses
-                if (!responseUrl.startsWith(GRAPHQL_ENDPOINT)) return;
-
-                // Wait for the page to parse it's data
-                while (!page.itemSpec) await sleep(100);
-
                 try {
-                    switch (resultsType) {
-                        case SCRAPE_TYPES.POSTS:
-                            await handlePostsGraphQLResponse({
-                                page,
-                                response,
-                                scrollingState,
-                                extendOutputFunction,
-                            });
-                            break;
-                        case SCRAPE_TYPES.COMMENTS:
-                            await handleCommentsGraphQLResponse({
-                                page,
-                                response,
-                                scrollingState,
-                                extendOutputFunction,
-                            });
-                            break;
-                        default:
+                    const responseUrl = response.url();
+
+                    if (!page.itemSpec) {
+                        // Wait for the page to parse it's data
+                        while (!page.itemSpec && waitingTries-- > 0) {
+                            await sleep(100);
+                        }
+
+                        if (waitingTries <= 0) {
+                            // it was stuck forever
+                            return;
+                        }
+                    }
+
+                    if (responseUrl.startsWith(GRAPHQL_ENDPOINT)) {
+                        switch (resultsType) {
+                            case SCRAPE_TYPES.POSTS:
+                                await handlePostsGraphQLResponse({
+                                    page,
+                                    response,
+                                    scrollingState,
+                                    extendOutputFunction,
+                                });
+                                break;
+                            case SCRAPE_TYPES.COMMENTS:
+                                await handleCommentsGraphQLResponse({
+                                    page,
+                                    response,
+                                    scrollingState,
+                                    extendOutputFunction,
+                                });
+                                break;
+                            default:
+                        }
+                    } else if (responseUrl.startsWith(V1_ENDPOINT)) {
+                        // mostly for locations
+                        switch (resultsType) {
+                            case SCRAPE_TYPES.POSTS: {
+                                const entryData = await response.json();
+
+                                await scrapePosts({
+                                    additionalData: {},
+                                    entryData,
+                                    page,
+                                    itemSpec: page.itemSpec,
+                                    extendOutputFunction,
+                                    resultsType,
+                                    requestQueue,
+                                    scrollingState,
+                                    fromResponse: true,
+                                });
+                                break;
+                            }
+                            default:
+                        }
                     }
                 } catch (e) {
-                    Apify.utils.log.exception(e, `Error happened while processing response`);
+                    Apify.utils.log.debug(`Error happened while processing response`, {
+                        url: request.url,
+                        error: e.message,
+                    });
                 }
             });
-
-            // make sure the post page don't scroll outside when scrolling for comments,
-            // otherwise it will hang forever
-            await page.evaluateOnNewDocument((pageType) => {
-                window.addEventListener('load', () => {
-                    const closeModal = () => {
-                        document.body.style.overflow = 'auto';
-
-                        const cookieModalButton = document.querySelectorAll('[role="presentation"] [role="dialog"] button:first-of-type');
-
-                        if (cookieModalButton.length) {
-                            for (const button of cookieModalButton) {
-                                if (!button.closest('#loginForm')) {
-                                    button.click();
-                                } else {
-                                    const loginModal = button.closest('[role="presentation"]');
-                                    if (loginModal) {
-                                        loginModal.remove();
-                                    }
-                                }
-                            }
-                        } else {
-                            setTimeout(closeModal, 1000);
-                        }
-                    };
-
-                    setTimeout(closeModal, 3000);
-                });
-            }, request.userData.pageType);
         }],
         maxRequestRetries,
         launchContext: {
@@ -343,6 +406,7 @@ Apify.main(async () => {
                     ...launchContext.launchOptions,
                     bypassCSP: true,
                     ignoreHTTPSErrors: true,
+                    devtools: input.debugLog,
                     locale,
                     args: [
                         `--user-agent=${headerGenerator.getHeaders({ locales: locale ? [locale] : [] })['user-agent']}`,
@@ -425,8 +489,19 @@ Apify.main(async () => {
 
             await page.waitForFunction(() => {
                 // eslint-disable-next-line no-underscore-dangle
-                return !(window?.__initialData?.pending) && window?.__initialData?.data;
+                return (!(window?.__initialData?.pending)
+                    && window?.__initialData?.data);
             }, { timeout: 20000 });
+
+            try {
+                // this happens in the evaluateOnNewDocument, so we wait a bit
+                await page.waitForFunction(() => {
+                    return (Object.keys(window?.__additionalData ?? {}).length > 0);
+                }, { timeout: 10000 });
+            } catch (e) {
+                log.debug('Additional data', { url: request.url, e: e.message });
+            }
+
             // eslint-disable-next-line no-underscore-dangle
             const { pending, data } = await page.evaluate(() => window.__initialData);
             const additionalData = await page.evaluate(() => {
@@ -475,9 +550,13 @@ Apify.main(async () => {
                             await scrapePosts({
                                 page,
                                 itemSpec,
+                                additionalData,
                                 entryData,
                                 scrollingState,
                                 extendOutputFunction,
+                                requestQueue,
+                                resultsType,
+                                fromResponse: false,
                             });
                             break;
                         case SCRAPE_TYPES.COMMENTS:
@@ -519,8 +598,9 @@ Apify.main(async () => {
                 }
             }
         },
-        handleFailedRequestFunction: async ({ request }) => {
-            Apify.utils.log.error(`${request.url}: Request ${request.url} failed ${maxRequestRetries + 1} times, not retrying any more`);
+        handleFailedRequestFunction: async ({ request, error }) => {
+            Apify.utils.log.exception(error, `${request.url}: Request failed ${maxRequestRetries + 1} times, not retrying any more`);
+
             await Apify.pushData({
                 '#debug': Apify.utils.createRequestDebugInfo(request),
                 '#error': request.url,

@@ -78,19 +78,23 @@ const getPageTypeFromUrl = (url) => {
 
 /**
  * Takes object from _sharedData.entry_data and parses it into simpler object
- * @param {Object} entryData
- * @param {any} additionalData
+ * @param {Record<string, any>} entryData
+ * @param {Record<string, any>} additionalData
  */
 const getItemSpec = (entryData, additionalData) => {
     if (entryData.LocationsPage) {
         const itemData = coalesce([
-            { obj: entryData, paths: ['LocationsPage[0].graphql.location'] },
+            { obj: entryData,
+                paths: [
+                    'LocationsPage[0].graphql.location',
+                    'LocationsPage[0].native_location_data.location_info',
+                ] },
             { obj: additionalData, paths: ['graphql.location'] },
         ]);
         return {
             pageType: PAGE_TYPES.PLACE,
             id: itemData.slug,
-            locationId: itemData.id,
+            locationId: itemData.id ?? itemData.location_id,
             locationSlug: itemData.slug,
             locationName: itemData.name,
         };

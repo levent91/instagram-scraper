@@ -220,11 +220,11 @@ const getOutputFromEntryData = async ({ input, itemSpec, request, entryData, pag
 const scrapeDetails = async ({ input, request, itemSpec, data, page, includeHasStories, extendOutputFunction }) => {
     const entryData = data.entry_data;
     let hasPublicStories;
-    if (includeHasStories) hasPublicStories = await loadHasPublicStories({ page, data, itemSpec });
+    if (includeHasStories) hasPublicStories = await loadPublicStories({ page, data, itemSpec });
 
     const output = await getOutputFromEntryData({ input, itemSpec, request, entryData, page });
 
-    if (includeHasStories) output.hasPublicStory = hasPublicStories;
+    if (includeHasStories) output.hasPublicStory = hasPublicStories?.user?.has_public_story ?? false;
 
     await extendOutputFunction(output, {
         label: 'details',
@@ -241,7 +241,7 @@ const scrapeDetails = async ({ input, request, itemSpec, data, page, includeHasS
  *   itemSpec: any,
  * }} params
  */
-const loadHasPublicStories = async ({ page, itemSpec, data }) => {
+const loadPublicStories = async ({ page, itemSpec, data }) => {
     if (!data.entry_data.ProfilePage) throw new Error('Not a profile page');
     const userId = data.entry_data.ProfilePage[0].graphql.user.id;
 
@@ -257,7 +257,7 @@ const loadHasPublicStories = async ({ page, itemSpec, data }) => {
                 include_highlight_reels: true,
                 include_live_status: true,
             },
-            (d) => d.user.has_public_story,
+            (d) => d,
             page,
             itemSpec,
             'Stories',

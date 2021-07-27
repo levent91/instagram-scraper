@@ -11,6 +11,7 @@ const QUERY_IDS = {
     postQueryId: 'fead941d698dc1160a298ba7bec277ac',
     profileHighlights: '45246d3fe16ccc6577e0bd297a5db1ab',
     profilePublicStories: 'd4d88dc1500312af6f937f7b804c68c3',
+    profileStories: 'c9c56db64beb4c9dea2d17740d0259d9',
 };
 
 module.exports = { QUERY_IDS };

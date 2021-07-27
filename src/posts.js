@@ -21,20 +21,30 @@ const getPostsFromGraphQL = ({ pageType, data }) => {
     let timeline;
     switch (pageType) {
         case PAGE_TYPES.PLACE:
-            timeline = data.location.edge_location_to_media;
+            timeline = data?.location?.edge_location_to_media
+                ?? {
+                    edges: data?.sections?.filter(({ layout_type }) => layout_type === 'media_grid')
+                        .flatMap(({ layout_content }) => layout_content.medias.map(({ media }) => media)),
+                };
             break;
         case PAGE_TYPES.PROFILE:
-            timeline = data && data.user && data.user.edge_owner_to_timeline_media;
+            timeline = data?.user?.edge_owner_to_timeline_media;
             break;
         case PAGE_TYPES.HASHTAG:
-            timeline = data.hashtag.edge_hashtag_to_media;
+            timeline = data?.hashtag?.edge_hashtag_to_media;
             break;
         default: throw new Error('Not supported');
     }
-    const postItems = timeline ? timeline.edges : [];
-    const hasNextPage = timeline ? timeline.page_info.has_next_page : false;
-    const postsCount = timeline ? timeline.count : null;
-    return { posts: postItems, hasNextPage, postsCount };
+    const postItems = timeline?.edges ?? [];
+    const hasNextPage = timeline?.page_info?.has_next_page ?? false;
+    const postsCount = timeline?.count ?? postItems.length;
+
+    return {
+        posts: postItems,
+        hasNextPage,
+        postsCount,
+        needsEnqueue: data?.needsEnqueue ?? false,
+    };
 };
 
 /**
@@ -47,19 +57,25 @@ const getPostsFromEntryData = (pageType, data) => {
     let pageData;
     switch (pageType) {
         case PAGE_TYPES.PLACE:
-            pageData = data.LocationsPage;
+            pageData = data?.LocationsPage?.[0]?.graphql ?? { sections: [
+                ...(data?.sections ?? []),
+                ...(data?.LocationsPage?.[0]?.native_location_data?.ranked?.sections ?? []),
+                ...(data?.LocationsPage?.[0]?.native_location_data?.recent?.sections ?? []),
+            ],
+            needsEnqueue: true };
             break;
         case PAGE_TYPES.PROFILE:
-            pageData = data.ProfilePage;
+            pageData = data.ProfilePage[0].graphql;
             break;
         case PAGE_TYPES.HASHTAG:
-            pageData = data.TagPage;
+            pageData = data.TagPage[0].graphql;
             break;
         default: throw new Error('Not supported');
     }
-    if (!pageData || !pageData.length) return null;
 
-    return getPostsFromGraphQL({ pageType, data: pageData[0].graphql });
+    if (!pageData) return null;
+
+    return getPostsFromGraphQL({ pageType, data: pageData });
 };
 
 /**
@@ -73,7 +89,7 @@ const scrapePost = (request, itemSpec, entryData, additionalData) => {
         try {
             return entryData.PostPage[0].graphql.shortcode_media;
         } catch (e) {
-            return additionalData.data.graphql.shortcode_media;
+            return additionalData.graphql.shortcode_media;
         }
     })();
 
@@ -101,13 +117,53 @@ const scrapePost = (request, itemSpec, entryData, additionalData) => {
  * @param {{
  *   page: Puppeteer.Page,
  *   itemSpec: any,
+ *   additionalData: any,
  *   entryData: Record<string, any>,
- *   scrollingState: Record<string, any>
+ *   scrollingState: Record<string, any>,
+ *   requestQueue: Apify.RequestQueue,
  *   extendOutputFunction: (data: any, meta: any) => Promise<void>,
+ *   resultsType: string,
+ *   fromResponse: boolean,
  * }} params
  */
-const scrapePosts = async ({ page, itemSpec, entryData, scrollingState, extendOutputFunction }) => {
+const scrapePosts = async ({ page, itemSpec, requestQueue, entryData, fromResponse = false, scrollingState, extendOutputFunction, additionalData, resultsType }) => {
     const timeline = getPostsFromEntryData(itemSpec.pageType, entryData);
+
+    if (!timeline) {
+        return;
+    }
+
+    if (timeline?.needsEnqueue) {
+        if (!timeline.posts?.length) {
+            return;
+        }
+
+        let count = 0;
+
+        // needs to enqueue the codes, since the location data is completely different
+        for (const { code } of timeline.posts) {
+            const rq = await requestQueue.addRequest({
+                url: `https://www.instagram.com/p/${code}`,
+                userData: {
+                    label: 'postDetail',
+                    pageType: PAGE_TYPES.POST,
+                },
+            });
+
+            if (!rq.wasAlreadyPresent) {
+                count++;
+            }
+        }
+
+        if (count > 0) {
+            log(itemSpec, `Got ${count} posts`, LOG_TYPES.INFO);
+        }
+
+        if (fromResponse) {
+            return;
+        }
+    }
+
     initData[itemSpec.id] = timeline;
 
     // Check if the posts loaded properly
@@ -138,60 +194,72 @@ const scrapePosts = async ({ page, itemSpec, entryData, scrollingState, extendOu
         }
     }
 
-    if (initData[itemSpec.id]) {
-        const postsReadyToPush = await filterPushedItemsAndUpdateState({
-            items: timeline.posts,
-            itemSpec,
-            parsingFn: parsePostsForOutput,
-            scrollingState,
-            type: 'posts',
-            page,
-        });
-        // We save last date for the option to specify how far into the past we should scroll
-        if (postsReadyToPush.length > 0) {
-            scrollingState[itemSpec.id].lastPostDate = postsReadyToPush[postsReadyToPush.length - 1].timestamp;
-        }
-
-        log(itemSpec, `${timeline.posts.length} posts loaded, ${Object.keys(scrollingState[itemSpec.id].ids).length}/${timeline.postsCount} posts scraped`);
-        await extendOutputFunction(postsReadyToPush, {
-            label: 'post',
-        });
-    } else {
-        log(itemSpec, 'Waiting for initial data to load');
-        while (!initData[itemSpec.id]) await sleep(100);
-    }
-
-    await sleep(500);
-
-    const hasMostRecentPostsOnHashtagPage = itemSpec.pageType === PAGE_TYPES.HASHTAG
-        ? await page.evaluate(() => document.querySelector('article > h2') !== null
-        && document.querySelector('article > h2').textContent === 'Most recent')
-        : true;
-
-    // Places/locations don't allow scrolling without login
-    const isUnloggedPlace = itemSpec.pageType === PAGE_TYPES.PLACE && !itemSpec.input.loginCookies;
-    if (isUnloggedPlace) {
-        log(itemSpec, 'Place/location pages allow scrolling only under login, collecting initial posts and finishing', LOG_TYPES.WARNING);
-        return;
-    }
-
-    const hasNextPage = initData[itemSpec.id].hasNextPage && hasMostRecentPostsOnHashtagPage;
-    if (hasNextPage) {
-        const shouldContinue = shouldContinueScrolling({ itemSpec, scrollingState, oldItemCount: 0, type: 'posts' });
-        if (shouldContinue) {
-            await sleep(1000);
-            await finiteScroll({
+    if (!timeline.needsEnqueue) {
+        if (initData[itemSpec.id]) {
+            const postsReadyToPush = await filterPushedItemsAndUpdateState({
+                items: timeline.posts,
                 itemSpec,
-                page,
+                parsingFn: parsePostsForOutput,
                 scrollingState,
-                getItemsFromGraphQLFn: getPostsFromGraphQL,
                 type: 'posts',
+                page,
             });
+            // We save last date for the option to specify how far into the past we should scroll
+            if (postsReadyToPush.length > 0) {
+                scrollingState[itemSpec.id].lastPostDate = postsReadyToPush[postsReadyToPush.length - 1].timestamp;
+            }
+
+            log(itemSpec, `${timeline.posts.length} posts loaded, ${Object.keys(scrollingState[itemSpec.id].ids).length}/${timeline.postsCount} posts scraped`);
+            await extendOutputFunction(postsReadyToPush, {
+                label: 'post',
+            });
+        } else {
+            log(itemSpec, 'Waiting for initial data to load');
+            while (!initData[itemSpec.id]) await sleep(100);
         }
-    } else {
-        // We have to forcefully close the browser here because it hangs sometimes for some listeners reasons
-        // Because we always have max one page per browser, this is fine
-        // console.log(`Puppeteer retire posts.js line 176`);
+    }
+
+    if (!fromResponse) {
+        // this is not coming from the main page initial data
+        await sleep(500);
+
+        const hasMostRecentPostsOnHashtagPage = itemSpec.pageType === PAGE_TYPES.HASHTAG
+            ? await page.evaluate(() => document.querySelector('article > h2') !== null
+            && document.querySelector('article > h2').textContent === 'Most recent')
+            : true;
+
+        // Places/locations don't allow scrolling without login
+        const isUnloggedPlace = itemSpec.pageType === PAGE_TYPES.PLACE && !itemSpec.input.loginCookies;
+        if (isUnloggedPlace) {
+            log(itemSpec, 'Place/location pages allow scrolling only under login, collecting initial posts and finishing', LOG_TYPES.WARNING);
+            return;
+        }
+
+        if (timeline.needsEnqueue) {
+            log(itemSpec, 'Scrolling until the end', LOG_TYPES.INFO);
+
+            await Apify.utils.puppeteer.infiniteScroll(page, {
+                waitForSecs: 20,
+            });
+        } else {
+            const hasNextPage = initData[itemSpec.id].hasNextPage && hasMostRecentPostsOnHashtagPage;
+            if (hasNextPage) {
+                const shouldContinue = shouldContinueScrolling({ itemSpec, scrollingState, oldItemCount: 0, type: 'posts' });
+                if (shouldContinue) {
+                    await sleep(1000);
+                    await finiteScroll({
+                        itemSpec,
+                        page,
+                        scrollingState,
+                        getItemsFromGraphQLFn: getPostsFromGraphQL,
+                        type: 'posts',
+                    });
+                }
+            }
+            // We have to forcefully close the browser here because it hangs sometimes for some listeners reasons
+            // Because we always have max one page per browser, this is fine
+            // console.log(`Puppeteer retire posts.js line 176`);
+        }
     }
 };
 
@@ -253,9 +321,15 @@ function parsePostsForOutput(posts, itemSpec, currentScrollingPosition) {
     return posts.map((item, index) => ({
         '#debug': {
             ...itemSpec,
-            shortcode: item.node.shortcode,
-            postLocationId: (item.node.location && item.node.location.id) || null,
-            postOwnerId: (item.node.owner && item.node.owner.id) || null,
+            shortcode:
+                item?.node?.shortcode
+                ?? item?.code,
+            postLocationId: item?.node?.location?.id
+                ?? item?.location?.pk
+                ?? null,
+            postOwnerId: item?.node?.owner?.id
+                ?? item?.user?.pk
+                ?? null,
         },
         queryTag: itemSpec.tagName,
         queryUsername: itemSpec.userUsername,
