@@ -38,17 +38,21 @@ async function expandOwnerDetails(posts, page, itemSpec) {
             // eslint-disable-next-line no-continue
             continue;
         }
-        const owner = await singleQuery(
-            postQueryId,
-            { shortcode: posts[i]['#debug'].shortcode, ...defaultVariables },
-            transformFunction,
-            page,
-            itemSpec,
-            'Owner details',
-        );
-        users[posts[i].ownerId] = owner;
-        newPost.ownerUsername = users[posts[i].ownerId].username;
-        newPost.owner = users[posts[i].ownerId];
+        try {
+            const owner = await singleQuery(
+                postQueryId,
+                { shortcode: posts[i]['#debug'].shortcode, ...defaultVariables },
+                transformFunction,
+                page,
+                itemSpec,
+                'Owner details',
+            );
+            users[posts[i].ownerId] = owner;
+            newPost.ownerUsername = users[posts[i].ownerId].username;
+            newPost.owner = users[posts[i].ownerId];
+        } catch (e) {
+            Apify.utils.log.debug(`${e.message}`, posts[i]);
+        }
         transformedPosts.push(newPost);
         await sleep(500);
     }

@@ -225,7 +225,7 @@ async function query(
     while (retries < 10) {
         try {
             const body = await page.evaluate(async ({ url, APP_ID, ASBD }) => {
-                return fetch(url, {
+                const res = await fetch(url, {
                     headers: {
                         'user-agent': window.navigator.userAgent,
                         accept: '*/*',
@@ -237,27 +237,42 @@ async function query(
                         'x-ig-app-id': APP_ID,
                         'x-requested-with': 'XMLHttpRequest',
                     },
-                    referrer: window.location.href,
+                    referrer: 'https://www.instagram.com/',
                     credentials: 'include',
                     mode: 'cors',
-                }).then((res) => res.json());
+                });
+
+                if (res.status !== 200) {
+                    throw new Error(`Status code ${res.status}`);
+                }
+
+                try {
+                    return await res.json();
+                } catch (e) {
+                    throw new Error('Invalid response returned');
+                }
             }, {
                 url,
                 APP_ID: process.env.APP_ID,
                 ASBD: process.env.ASBD,
             });
+
             if (isData && !body?.data) throw new Error(`${logPrefix} - GraphQL query does not contain data`);
+
             return nodeTransformationFunc(isData ? body.data : body);
         } catch (error) {
+            Apify.utils.log.debug('query', { url, message: error.message });
+
             if (error.message.includes(429)) {
                 log(itemSpec, `${logPrefix} - Encountered rate limit error, waiting ${(retries + 1) * 10} seconds.`, LOG_TYPES.WARNING);
                 await sleep((retries + 1) * 10000);
+                retries++;
             } else {
-                Apify.utils.log.exception(error, 'query', { url });
+                throw error;
             }
-            retries++;
         }
     }
+
     log(itemSpec, `${logPrefix} - Could not load more items`);
     return { nextPageCursor: null, data: [] };
 }

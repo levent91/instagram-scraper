@@ -417,7 +417,7 @@ Apify.main(async () => {
                 };
             }],
             postPageCloseHooks: [async (pageId, browserController) => {
-                if (!browserController?.launchContext?.session?.isUsable()) {
+                if (browserController?.launchContext?.session?.isUsable() === true) {
                     await browserController.close();
                 }
             }],
