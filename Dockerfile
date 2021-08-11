@@ -1,7 +1,6 @@
 FROM apify/actor-node-puppeteer-chrome:16
 
-# Copy source code
-COPY . ./
+COPY package*.json ./
 
 RUN npm --quiet set progress=false \
  && npm install --only=prod --no-optional \
@@ -12,4 +11,7 @@ RUN npm --quiet set progress=false \
  && echo "NPM version:" \
  && npm --version
 
+COPY . ./
+
 ENV APIFY_DISABLE_OUTDATED_WARNING 1
+ENV npm_config_loglevel=silent

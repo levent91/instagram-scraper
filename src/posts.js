@@ -31,7 +31,11 @@ const getPostsFromGraphQL = ({ pageType, data }) => {
             timeline = data?.user?.edge_owner_to_timeline_media;
             break;
         case PAGE_TYPES.HASHTAG:
-            timeline = data?.hashtag?.edge_hashtag_to_media;
+            timeline = data?.hashtag?.edge_hashtag_to_media
+                ?? {
+                    edges: data?.sections?.filter(({ layout_type }) => layout_type === 'media_grid')
+                        .flatMap(({ layout_content }) => layout_content.medias.map(({ media }) => media)),
+                };
             break;
         default: throw new Error('Not supported');
     }
@@ -68,7 +72,13 @@ const getPostsFromEntryData = (pageType, data) => {
             pageData = data.ProfilePage[0].graphql;
             break;
         case PAGE_TYPES.HASHTAG:
-            pageData = data.TagPage[0].graphql;
+            pageData = data?.TagPage?.[0]?.graphql ?? {
+                sections: [
+                    ...(data?.recent?.sections ?? []),
+                    ...(data?.top?.sections ?? []),
+                ],
+                needsEnqueue: true,
+            };
             break;
         default: throw new Error('Not supported');
     }
@@ -134,14 +144,21 @@ const scrapePosts = async ({ page, itemSpec, requestQueue, entryData, fromRespon
     }
 
     if (timeline?.needsEnqueue) {
+        Apify.utils.log.debug('Needs enqueue', { url: page.url(), length: timeline.posts?.length });
+
         if (!timeline.posts?.length) {
             return;
         }
 
+        scrollingState[itemSpec.id] = scrollingState[itemSpec.id] || {
+            ids: {},
+            allDuplicates: false,
+        };
+
         let count = 0;
 
         // needs to enqueue the codes, since the location data is completely different
-        for (const { code } of timeline.posts) {
+        for (const { code, id } of timeline.posts) {
             const rq = await requestQueue.addRequest({
                 url: `https://www.instagram.com/p/${code}`,
                 userData: {
@@ -153,6 +170,12 @@ const scrapePosts = async ({ page, itemSpec, requestQueue, entryData, fromRespon
             if (!rq.wasAlreadyPresent) {
                 count++;
             }
+
+            scrollingState[itemSpec.id].ids[id] = true;
+
+            if (Object.keys(scrollingState[itemSpec.id].ids).length >= itemSpec.limit) {
+                return;
+            }
         }
 
         if (count > 0) {
@@ -160,6 +183,7 @@ const scrapePosts = async ({ page, itemSpec, requestQueue, entryData, fromRespon
         }
 
         if (fromResponse) {
+            Apify.utils.log.debug('From response', { url: page.url() });
             return;
         }
     }
@@ -238,9 +262,21 @@ const scrapePosts = async ({ page, itemSpec, requestQueue, entryData, fromRespon
         if (timeline.needsEnqueue) {
             log(itemSpec, 'Scrolling until the end', LOG_TYPES.INFO);
 
-            await Apify.utils.puppeteer.infiniteScroll(page, {
-                waitForSecs: 20,
-            });
+            while (true) { // eslint-disable-line no-constant-condition
+                if (Object.keys(scrollingState[itemSpec.id].ids).length >= itemSpec.limit) {
+                    return;
+                }
+
+                await page.evaluate(() => {
+                    window.scrollTo({ top: document.body.scrollHeight });
+                });
+
+                await sleep(itemSpec.scrollWaitSecs || 3000);
+
+                await page.evaluate(() => {
+                    window.scrollTo({ top: document.body.scrollHeight * 0.70 });
+                });
+            }
         } else {
             const hasNextPage = initData[itemSpec.id].hasNextPage && hasMostRecentPostsOnHashtagPage;
             if (hasNextPage) {

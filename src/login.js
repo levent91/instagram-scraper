@@ -218,7 +218,15 @@ const loginManager = ({ loginCookies, maxErrorCount }) => {
                 if (l.errors < maxErrorCount) {
                     await page.setCookie(...l.cookies
                         .filter((s) => `${s.domain}`.includes('instagram'))
-                        .map((s) => ({ ...s, domain: '.instagram.com' })));
+                        .map(({
+                            expirationDate,
+                            id,
+                            storeId,
+                            size,
+                            sourceScheme,
+                            sourcePort,
+                            ...s
+                        }) => ({ ...s, domain: '.instagram.com' })));
 
                     session.userData.loginIndex = l.index;
 

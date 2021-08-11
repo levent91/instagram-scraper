@@ -1,3 +1,18 @@
+### 2021-08-02
+
+Features:
+- Update to SDK 2
+- Better UX
+
+Bug fixes:
+- Stories
+- Scrolling for hashtag, posts, comments and location
+- Login cookies and management
+- Cookies export
+- Lessen the redirects
+- Proper datacenter proxy support
+- Implemented Extend Output Function
+
 ### 2021-03-16
 
 #### Bug fixes

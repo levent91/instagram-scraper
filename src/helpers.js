@@ -93,16 +93,21 @@ const getItemSpec = (entryData, additionalData) => {
         ]);
         return {
             pageType: PAGE_TYPES.PLACE,
-            id: itemData.slug,
+            id: itemData.slug ?? itemData.location_id,
             locationId: itemData.id ?? itemData.location_id,
-            locationSlug: itemData.slug,
+            locationSlug: itemData.slug ?? itemData.location_id,
             locationName: itemData.name,
         };
     }
 
     if (entryData.TagPage) {
         const itemData = coalesce([
-            { obj: entryData, paths: ['TagPage[0].graphql.hashtag'] },
+            { obj: entryData,
+                paths: [
+                    'TagPage[0].graphql.hashtag',
+                    'TagPage[0].data',
+                ],
+            },
             { obj: additionalData, paths: ['graphql.hashtag'] },
         ]);
         return {
@@ -229,13 +234,16 @@ async function query(
                     headers: {
                         'user-agent': window.navigator.userAgent,
                         accept: '*/*',
-                        'accept-language': `${window.navigator.language};q=0.7`,
-                        'x-csrftoken':
-                            window._sharedData?.config?.csrf_token
-                            ?? window.__initialData?.data?.config.csrf_token,
+                        'accept-language': `${window.navigator.language};q=0.9`,
                         'x-asbd-id': ASBD,
                         'x-ig-app-id': APP_ID,
-                        'x-requested-with': 'XMLHttpRequest',
+                        ...(url.includes('/v1') ? {} : {
+                            'x-ig-www-claim': sessionStorage.getItem('www-claim-v2') || 0,
+                            'x-csrftoken':
+                                window._sharedData?.config?.csrf_token
+                                ?? window.__initialData?.data?.config.csrf_token,
+                            'x-requested-with': 'XMLHttpRequest',
+                        }),
                     },
                     referrer: 'https://www.instagram.com/',
                     credentials: 'include',
@@ -447,7 +455,7 @@ const shouldContinueScrolling = ({ scrollingState, itemSpec, oldItemCount, type 
     const itemsScrapedCount = Object.keys(scrollingState[itemSpec.id].ids).length;
     const reachedLimit = itemsScrapedCount >= itemSpec.limit;
     if (reachedLimit) {
-        console.warn(`Reached max results (posts or commets) limit: ${itemSpec.limit}. Finishing scrolling...`);
+        console.warn(`Reached max results (posts or comments) limit: ${itemSpec.limit}. Finishing scrolling...`);
     }
     const shouldGoNextGeneric = !reachedLimit && (itemsScrapedCount !== oldItemCount || scrollingState[itemSpec.id].allDuplicates);
     return shouldGoNextGeneric;
@@ -462,6 +470,12 @@ const shouldContinueScrolling = ({ scrollingState, itemSpec, oldItemCount, type 
  * }} params
  */
 const loadMore = async ({ itemSpec, page, retry = 0, type }) => {
+    if (page.isClosed()) {
+        return {
+            data: null,
+        };
+    }
+
     // console.log('Starting load more fn')
     await page.keyboard.press('PageUp');
     const checkedVariable = getCheckedVariable(itemSpec.pageType);
@@ -555,7 +569,7 @@ const loadMore = async ({ itemSpec, page, retry = 0, type }) => {
 
     const response = await responsePromise;
     if (!response) {
-        log(itemSpec, 'Didn\'t receive a valid response in the current scroll, scrolling again...', LOG_TYPES.WARNING);
+        throw new Error('Didn\'t receive a valid response in the current scroll, scrolling again...');
     } else {
         // if (scrolled[1] || clicked[1]) {
         try {
@@ -609,7 +623,7 @@ const loadMore = async ({ itemSpec, page, retry = 0, type }) => {
         if (type === 'posts') {
             await page.evaluate(() => window.scrollBy(0, -1000));
         }
-        log(itemSpec, `Retry scroll after ${retryDelay / 3500} seconds`);
+        log(itemSpec, `Retry scroll after ${retryDelay / 3600} seconds`);
         await sleep(retryDelay);
         return loadMore({ itemSpec, page, retry: retry + 1, type });
     }

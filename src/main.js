@@ -76,7 +76,7 @@ Apify.main(async () => {
         if (!resultsType) throw errors.typeIsRequired();
         if (!Object.values(SCRAPE_TYPES).includes(resultsType)) throw errors.unsupportedType(resultsType);
         if (loginUsername && loginPassword && SCRAPE_TYPES.COOKIES !== resultsType) {
-            Apify.utils.log.warning('You provided username and password but will be ignored');
+            throw new Error('You provided username and password without setting "What to scrape from each page" to Cookies.\n\nRemove the login information if you already filled the Login Cookies field');
         }
     } catch (error) {
         Apify.utils.log.info('--  --  --  --  --');
@@ -88,6 +88,7 @@ Apify.main(async () => {
         process.exit(1);
     }
 
+    // Datacenter is more stable when using login
     if (!logins.loginCount() && proxyConfiguration && !proxyConfiguration?.groups?.includes('RESIDENTIAL')) {
         Apify.utils.log.warning(`--------
         You are using Apify proxy but not the RESIDENTIAL group! It is very likely it will not work properly.
@@ -103,7 +104,7 @@ Apify.main(async () => {
     if (resultsType === SCRAPE_TYPES.COOKIES) {
         if (loginUsername && loginPassword) {
             log.info('Will extract login information from username/password');
-            urls = ['https://instagram.com'];
+            urls = ['https://www.instagram.com'];
         } else {
             throw new Error('Result type is set to Cookies, but no username and password were provided');
         }
@@ -132,12 +133,12 @@ Apify.main(async () => {
 
     const requestQueue = await Apify.openRequestQueue();
     const requestList = await Apify.openRequestList('request-list', requestListSources);
+
     // keeps JS and CSS in a memory cache, since request interception disables cache
     const memoryCache = resourceCache([
         /static\/bundles/,
     ]);
 
-    // TODO: Move everything here
     const extendOutputFunction = await extendFunction({
         output: async (data) => {
             await Apify.pushData(data);
@@ -176,37 +177,22 @@ Apify.main(async () => {
     const crawler = new Apify.PuppeteerCrawler({
         requestList,
         requestQueue,
-        persistCookiesPerSession: true,
+        persistCookiesPerSession: false,
         useSessionPool: true,
         preNavigationHooks: [async ({ request, page, session }, gotoOptions) => {
+            const locale = new URL(request.url).searchParams.get('hl');
+
+            await page.setUserAgent(headerGenerator.getHeaders({ locales: locale ? [locale] : [] })['user-agent']);
+
             gotoOptions.waitUntil = 'domcontentloaded';
 
             await page.setBypassCSP(true);
 
             if (loginUsername && loginPassword && resultsType === SCRAPE_TYPES.COOKIES) {
                 await login(loginUsername, loginPassword, page);
-                const cookies = await page.cookies();
-                const storage = await page.evaluate(() => {
-                    const extract = (storage) => {
-                        return Object.getOwnPropertyNames(storage).reduce((out, key) => {
-                            out[key] = storage[key];
-                            return out;
-                        });
-                    };
+                await Apify.setValue('OUTPUT', await page.cookies());
 
-                    return {
-                        localStorage: extract(window.localStorage),
-                        sessionStorage: extract(window.sessionStorage),
-                        userAgent: navigator.userAgent,
-                    };
-                });
-
-                await Apify.setValue('OUTPUT', {
-                    cookies,
-                    ...storage,
-                });
-
-                Apify.utils.log.info('\n-----------\n\nCookies and storage saved, check OUTPUT in the key value store\n\n-----------\n');
+                Apify.utils.log.info('\n-----------\n\nCookies saved, check OUTPUT in the key value store\n\n-----------\n');
                 return;
             }
 
@@ -232,6 +218,8 @@ Apify.main(async () => {
             // make sure the post page don't scroll outside when scrolling for comments,
             // otherwise it will hang forever. place the additionalData back
             await page.evaluateOnNewDocument((pageType) => {
+                window.__bufferedErrors = window.__bufferedErrors || [];
+
                 window.addEventListener('load', () => {
                     let loaded = false;
                     let tries = 0;
@@ -383,6 +371,7 @@ Apify.main(async () => {
                         }
                     }
                 } catch (e) {
+                    // throwing here would be the death of the run
                     Apify.utils.log.debug(`Error happened while processing response`, {
                         url: request.url,
                         error: e.message,
@@ -408,22 +397,20 @@ Apify.main(async () => {
                     ignoreHTTPSErrors: true,
                     devtools: input.debugLog,
                     locale,
-                    args: [
-                        `--user-agent=${headerGenerator.getHeaders({ locales: locale ? [locale] : [] })['user-agent']}`,
-                        '--enable-features=NetworkService',
-                        '--ignore-certificate-errors',
-                        '--disable-blink-features=AutomationControlled', // removes webdriver from window.navigator
-                    ],
                 };
             }],
             postPageCloseHooks: [async (pageId, browserController) => {
-                if (browserController?.launchContext?.session?.isUsable() === true) {
+                if (browserController?.launchContext?.session?.isUsable() === false) {
+                    log.debug('Session not usable, closing browser');
                     await browserController.close();
                 }
             }],
         },
         sessionPoolOptions: {
             sessionOptions: {
+                maxUsageCount: logins.loginCount()
+                    ? 10000
+                    : undefined,
                 maxErrorScore: logins.loginCount()
                     ? maxErrorCount
                     : 0.5,
