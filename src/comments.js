@@ -1,7 +1,7 @@
 const Apify = require('apify');
 const Puppeteer = require('puppeteer'); // eslint-disable-line no-unused-vars
 const { getCheckedVariable, log, filterPushedItemsAndUpdateState, finiteScroll } = require('./helpers');
-const { PAGE_TYPES, GRAPHQL_ENDPOINT, LOG_TYPES } = require('./consts');
+const { PAGE_TYPES } = require('./consts');
 const errors = require('./errors');
 
 const { sleep } = Apify.utils;
@@ -17,7 +17,7 @@ const getCommentsFromGraphQL = ({ data }) => {
     let shortcode_media;
     // TODO remove this garbage :)
     if (data.data) {
-        log(itemSpec, 'HAD NESTED DATA', LOG_TYPES.WARNING)
+        // log(itemSpec, 'HAD NESTED DATA', LOG_TYPES.WARNING);
         shortcode_media = data.data.shortcode_media;
     } else {
         shortcode_media = data.shortcode_media;
@@ -30,17 +30,17 @@ const getCommentsFromGraphQL = ({ data }) => {
 };
 
 /**
- * Loads data from entry date and then loads comments untill limit is reached
+ * Loads data from entry date and then loads comments until limit is reached
  * @param {{
  *   page: Puppeteer.Page,
- *   request: Apify.Request,
  *   itemSpec: any,
  *   entryData: any,
  *   additionalData: any,
  *   scrollingState: any,
+ *   extendOutputFunction: (data: any, meta: any) => Promise<void>
  * }} params
  */
-const scrapeComments = async ({ page, itemSpec, entryData, additionalData, scrollingState, session }) => {
+const scrapeComments = async ({ page, itemSpec, entryData, additionalData, scrollingState, extendOutputFunction }) => {
     // Check that current page is of a type which has comments
     if (itemSpec.pageType !== PAGE_TYPES.POST) throw errors.notPostPage();
 
@@ -61,10 +61,14 @@ const scrapeComments = async ({ page, itemSpec, entryData, additionalData, scrol
             itemSpec,
             parsingFn: parseCommentsForOutput,
             scrollingState,
+            page,
+            type: 'comments',
         });
         log(page.itemSpec, `${timeline.comments.length} comments loaded, ${Object.keys(scrollingState[itemSpec.id].ids).length}/${timeline.commentsCount} comments scraped`);
 
-        await Apify.pushData(commentsReadyToPush);
+        await extendOutputFunction(commentsReadyToPush, {
+            label: 'comment',
+        });
     } else {
         log(itemSpec, 'Waiting for initial data to load');
         while (!initData[itemSpec.id]) await sleep(100);
@@ -81,21 +85,25 @@ const scrapeComments = async ({ page, itemSpec, entryData, additionalData, scrol
             scrollingState,
             getItemsFromGraphQLFn: getCommentsFromGraphQL,
             type: 'comments',
-            session,
         });
     }
 };
 
 /**
  * Takes GraphQL response, checks that it's a response with more comments and then parses the comments from it
- * @param {Object} page Puppeteer Page object
- * @param {Object} response Puppeteer Response object
+ * @param {{
+ *   page: Puppeteer.Page,
+ *   response: Puppeteer.HTTPResponse,
+ *   scrollingState: any,
+ *   extendOutputFunction: (data: any, meta: any) => Promise<void>,
+ * }} params
  */
-async function handleCommentsGraphQLResponse({ page, response, scrollingState, limit }) {
+async function handleCommentsGraphQLResponse({ page, response, scrollingState, extendOutputFunction }) {
     const responseUrl = response.url();
+    const { itemSpec } = page;
 
     // Get variable we look for in the query string of request
-    const checkedVariable = getCheckedVariable(page.itemSpec.pageType);
+    const checkedVariable = getCheckedVariable(itemSpec.pageType);
 
     // Skip queries for other stuff then posts
     if (!responseUrl.includes(checkedVariable) || !responseUrl.includes('%22first%22')) return;
@@ -111,24 +119,29 @@ async function handleCommentsGraphQLResponse({ page, response, scrollingState, l
 
     const timeline = getCommentsFromGraphQL({ data: data.data });
 
-    if (!initData[page.itemSpec.id]) {
-        initData[page.itemSpec.id] = timeline;
-    } else if (initData[page.itemSpec.id].hasNextPage && !timeline.hasNextPage) {
-        initData[page.itemSpec.id].hasNextPage = false;
+    if (!initData[itemSpec.id]) {
+        initData[itemSpec.id] = timeline;
+    } else if (initData[itemSpec.id].hasNextPage && !timeline.hasNextPage) {
+        initData[itemSpec.id].hasNextPage = false;
     }
 
     const commentsReadyToPush = await filterPushedItemsAndUpdateState({
         items: timeline.comments,
-        itemSpec: page.itemSpec,
+        itemSpec,
         parsingFn: parseCommentsForOutput,
         scrollingState,
-        limit,
+        page,
+        type: 'comments',
     });
-    log(page.itemSpec, `${timeline.comments.length} comments loaded, ${Object.keys(scrollingState[page.itemSpec.id].ids).length}/${timeline.commentsCount} comments scraped`);
-    await Apify.pushData(commentsReadyToPush);
+
+    log(itemSpec, `${timeline.comments.length} comments loaded, ${Object.keys(scrollingState[itemSpec.id].ids).length}/${timeline.commentsCount} comments scraped`);
+
+    await extendOutputFunction(commentsReadyToPush, {
+        label: 'comment',
+    });
 }
 
-function parseCommentsForOutput (comments, itemSpec, currentScrollingPosition) {
+function parseCommentsForOutput(comments, itemSpec, currentScrollingPosition) {
     return comments.map((item, index) => ({
         '#debug': {
             index: index + currentScrollingPosition + 1,
@@ -144,7 +157,7 @@ function parseCommentsForOutput (comments, itemSpec, currentScrollingPosition) {
         ownerIsVerified: item.node.owner ? item.node.owner.is_verified : null,
         ownerUsername: item.node.owner ? item.node.owner.username : null,
         ownerProfilePicUrl: item.node.owner ? item.node.owner.profile_pic_url : null,
-    }))
+    }));
 }
 
 module.exports = {

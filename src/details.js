@@ -1,13 +1,11 @@
 const Apify = require('apify');
 const Puppeteer = require('puppeteer'); // eslint-disable-line no-unused-vars
-const { log, parseCaption, loadXHR } = require('./helpers');
+const { log, parseCaption, singleQuery } = require('./helpers');
 const { PAGE_TYPES } = require('./consts');
 const { getPostLikes } = require('./likes');
 const { getProfileFollowedBy } = require('./followed_by');
 const { getProfileFollowing } = require('./following');
-const { xhrNotLoaded } = require('./errors');
-
-const { sleep } = Apify.utils;
+const { QUERY_IDS } = require('./query_ids');
 
 // Formats IGTV Video Post edge item into nicely formated output item
 const formatIGTVVideo = (edge) => {
@@ -31,7 +29,7 @@ const formatIGTVVideo = (edge) => {
 // Formats list of display recources into URLs
 const formatDisplayResources = (resources) => {
     if (!resources) return [];
-    return resources.map((resource) => resource.node.display_url).filter(s => s);
+    return resources.map((resource) => resource.node.display_url).filter((s) => s);
 };
 
 const sidecarImages = (node) => {
@@ -137,7 +135,7 @@ const formatProfileOutput = async (input, request, data, page, itemSpec) => {
         latestPosts: data.edge_owner_to_timeline_media ? data.edge_owner_to_timeline_media.edges.map((edge) => edge.node).map(formatSinglePost) : [],
         following,
         followedBy,
-        has_public_story: data.has_public_story,
+        hasPublicStory: data.has_public_story,
     };
 };
 
@@ -208,42 +206,65 @@ const getOutputFromEntryData = async ({ input, itemSpec, request, entryData, pag
     }
 };
 
-// Takes correct variable from window object and formats it into proper output
-const scrapeDetails = async ({ input, request, itemSpec, data, page, proxy, includeHasStories, proxyUrl }) => {
+/**
+ * @param {{
+ *   input: any,
+ *   request: Apify.Request,
+ *   page: Puppeteer.Page,
+ *   itemSpec: any,
+ *   data: Record<string, any>,
+ *   extendOutputFunction: (data: any, meta: any) => Promise<void>,
+ *   includeHasStories: boolean,
+ * }} params
+ */
+const scrapeDetails = async ({ input, request, itemSpec, data, page, includeHasStories, extendOutputFunction }) => {
     const entryData = data.entry_data;
     let hasPublicStories;
-    if (includeHasStories) hasPublicStories = await loadHasPublicStories(request, page, data, proxyUrl);
+    if (includeHasStories) hasPublicStories = await loadPublicStories({ page, data, itemSpec });
 
     const output = await getOutputFromEntryData({ input, itemSpec, request, entryData, page });
 
-    if (includeHasStories) output.hasPublicStory = hasPublicStories;
+    if (includeHasStories) output.hasPublicStory = hasPublicStories?.user?.has_public_story ?? false;
 
-    await Apify.pushData(output);
+    await extendOutputFunction(output, {
+        label: 'details',
+    });
 
     log(itemSpec, 'Page details saved, task finished');
 };
 
 /**
  * Load has_public_story from separate XHR request
- * @param {Request} request
- * @param {Puppeteer.Page} page
- * @param {Object} data
- * @param {String} proxyUrl
- * @returns {Promise<*>}
+ * @param {{
+ *   page: Puppeteer.Page,
+ *   data: any,
+ *   itemSpec: any,
+ * }} params
  */
-const loadHasPublicStories = async (request, page, data, proxyUrl) => {
-    const { csrf_token } = data.config;
-    if (!data.entry_data.ProfilePage) throw 'Not a profile page';
+const loadPublicStories = async ({ page, itemSpec, data }) => {
+    if (!data.entry_data.ProfilePage) throw new Error('Not a profile page');
     const userId = data.entry_data.ProfilePage[0].graphql.user.id;
-    const url = `https://www.instagram.com/graphql/query/?query_hash=d4d88dc1500312af6f937f7b804c68c3&variables=%7B%22user_id%22%3A%22${userId}%22%2C%22include_chaining%22%3Afalse%2C%22include_reel%22%3Afalse%2C%22include_suggested_users%22%3Afalse%2C%22include_logged_out_extras%22%3Atrue%2C%22include_highlight_reels%22%3Afalse%2C%22include_live_status%22%3Atrue%7D`;
 
-    const response = await loadXHR({ request, page, url, csrf_token, proxyUrl });
-
-    if (response.statusCode === 200) {
-        const responseData = JSON.parse(response.body);
-        return responseData.data.user.has_public_story;
+    try {
+        return await singleQuery(
+            QUERY_IDS.profilePublicStories,
+            {
+                user_id: userId,
+                include_chaining: false,
+                include_reel: false,
+                include_suggested_users: false,
+                include_logged_out_extras: true,
+                include_highlight_reels: true,
+                include_live_status: true,
+            },
+            (d) => d,
+            page,
+            itemSpec,
+            'Stories',
+        );
+    } catch (e) {
+        throw new Error('XHR for hasPublicStory not loaded correctly.');
     }
-    throw 'XHR for hasPublicStory not loaded correctly.';
 };
 
 module.exports = {

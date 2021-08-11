@@ -1,4 +1,5 @@
 const Apify = require('apify');
+// eslint-disable-next-line no-unused-vars
 const Puppeteer = require('puppeteer');
 
 const { log } = Apify.utils;
@@ -50,41 +51,45 @@ const resourceCache = (paths) => {
         await page.setRequestInterception(true);
 
         page.on('request', async (req) => {
-            const url = req.url();
+            try {
+                const url = req.url();
 
-            if (req.resourceType() === 'image') {
-                // serve empty images so the `onload` events don't fail
-                if (url.includes('.jpg') || url.includes('.jpeg')) {
-                    return req.respond(images.jpg);
-                }
+                if (req.resourceType() === 'image') {
+                    // serve empty images so the `onload` events don't fail
+                    if (url.includes('.jpg') || url.includes('.jpeg')) {
+                        return req.respond(images.jpg);
+                    }
 
-                if (url.includes('.png')) {
-                    return req.respond(images.png);
-                }
+                    if (url.includes('.png')) {
+                        return req.respond(images.png);
+                    }
 
-                if (url.includes('.gif')) {
-                    return req.respond(images.gif);
-                }
-            } else if (['script', 'stylesheet'].includes(req.resourceType()) && paths.some((path) => path.test(url))) {
-                const content = cache.get(url);
+                    if (url.includes('.gif')) {
+                        return req.respond(images.gif);
+                    }
+                } else if (['script', 'stylesheet'].includes(req.resourceType()) && paths.some((path) => path.test(url))) {
+                    const content = cache.get(url);
 
-                // log.debug('Cache', { url, headers: content?.headers, type: content?.contentType, length: content?.content?.length });
+                    // log.debug('Cache', { url, headers: content?.headers, type: content?.contentType, length: content?.content?.length });
 
-                if (content?.loaded === true) {
-                    return req.respond({
-                        body: content.content,
-                        status: 200,
-                        contentType: content.contentType,
-                        headers: content.headers,
+                    if (content?.loaded === true) {
+                        return req.respond({
+                            body: content.content,
+                            status: 200,
+                            contentType: content.contentType,
+                            headers: content.headers,
+                        });
+                    }
+
+                    cache.set(url, {
+                        loaded: false,
                     });
                 }
 
-                cache.set(url, {
-                    loaded: false,
-                });
+                await req.continue();
+            } catch (e) {
+                // page closed, most likely
             }
-
-            await req.continue();
         });
 
         page.on('response', async (res) => {

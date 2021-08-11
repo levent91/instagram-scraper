@@ -428,24 +428,56 @@ The structure of each post detail looks like this:
 
 ## Extend output function
 
-You can use this function to update the result output of this actor. Note that the return value of this function has to be an object.
+You can use this function to update the result output of this actor.
 
-You can return fields to achieve three different things:
-- Add a new field - Return an object with a field that is not in the result output
-- Change a field - Return an existing field with a new value
-- Remove a field - Return an existing field with a value `undefined`
+Return `null` to omit the output of the item.
 
+```js
+async ({ data, item, itemSpec, page, request, customData, label }) => {
+    delete item.displayResourceUrls;
+    item.alt = 'N/A';
+    item.additionalField = customData.additionalField; // comes from the input
 
-```
-() => {
-    return {
-        "comment added": document.querySelector('time').textContent,
-        "caption": "NA",
-        displayResourceUrls: undefined
+    // each result type has it's own label
+    switch (label) {
+        case 'comment':
+            break;
+        case 'details':
+            break;
+        case 'post':
+            if (!item.caption?.include('cute')) {
+                return null; // omits output for posts without the alt text containin the word 'cute'
+            }
+            break;
+        case 'stories':
+            break;
     }
+
+    return item;
 }
 ```
-This example will add a new field `comment added`, change the `caption` field and remove `displayResourceUrls` field
+
+This example will add a new field `additionalField` that comes from the input, change the `alt` field and remove `displayResourceUrls` field.
+Note that the return value of this function has to be an object or an array.
+
+You can split your result into individual items, like to make it CSV friendly or to output one item per profile post, for example:
+
+```js
+async ({ data, item, itemSpec, page, request, customData, label }) => {
+    if (label === 'details') {
+        const { latestPosts, ...profile } = item;
+        // split the latestPosts one per row, by returning an array
+        return latestPosts.map((post) => {
+            return {
+                profile,
+                ...post
+            }
+        });
+    }
+
+    return item;
+}
+```
 
 ## Changelog
 

@@ -1,4 +1,5 @@
 const Apify = require('apify');
+const HeaderGenerator = require('header-generator');
 
 const { resourceCache } = require('./resource-cache');
 const { scrapePosts, handlePostsGraphQLResponse, scrapePost } = require('./posts');
@@ -6,14 +7,15 @@ const { scrapeComments, handleCommentsGraphQLResponse } = require('./comments');
 const { scrapeStories } = require('./stories');
 const { scrapeDetails } = require('./details');
 const { searchUrls } = require('./search');
-const { getItemSpec, getPageTypeFromUrl, extendFunction } = require('./helpers');
-const { GRAPHQL_ENDPOINT, ABORT_RESOURCE_TYPES, ABORT_RESOURCE_URL_INCLUDES, SCRAPE_TYPES,
-    ABORT_RESOURCE_URL_DOWNLOAD_JS, PAGE_TYPES } = require('./consts');
-const { initQueryIds } = require('./query_ids');
-const errors = require('./errors');
-const { login } = require('./login');
+const helpers = require('./helpers');
 
-const { sleep } = Apify.utils;
+const { getItemSpec, getPageTypeFromUrl, extendFunction } = helpers;
+const { GRAPHQL_ENDPOINT, ABORT_RESOURCE_TYPES, ABORT_RESOURCE_URL_INCLUDES, SCRAPE_TYPES,
+    ABORT_RESOURCE_URL_DOWNLOAD_JS, PAGE_TYPES, V1_ENDPOINT } = require('./consts');
+const errors = require('./errors');
+const { login, loginManager } = require('./login');
+
+const { sleep, log } = Apify.utils;
 
 Apify.main(async () => {
     /** @type {any} */
@@ -29,22 +31,24 @@ Apify.main(async () => {
         loginCookies,
         directUrls = [],
         loginUsername,
-        maxErrorCount,
+        maxErrorCount = 15,
         loginPassword,
         useStealth = false,
         useChrome,
+        debugLog = false,
         includeHasStories = false,
         cookiesPerConcurrency = 1,
         blockMoreAssets = false,
         checkProxyIp = false, // For internal debug
     } = input;
 
-    if (proxy && proxy.proxyUrls && proxy.proxyUrls.length === 0) delete proxy.proxyUrls;
-
-    await initQueryIds();
+    if (debugLog) {
+        log.setLevel(log.LEVELS.DEBUG);
+    }
 
     // We have to keep a state of posts/comments we already scraped so we don't push duplicates
     // TODO: Cleanup individual users/posts after all posts/comments are pushed
+    /** @type {Record<string, any>} */
     const scrollingState = (await Apify.getValue('STATE-SCROLLING')) || {};
     const persistState = async () => {
         await Apify.setValue('STATE-SCROLLING', scrollingState);
@@ -52,21 +56,27 @@ Apify.main(async () => {
     Apify.events.on('persistState', persistState);
 
     let maxConcurrency = input.maxConcurrency || 1000;
-    let loginCount = 0;
+    const logins = loginManager({
+        loginCookies,
+        maxErrorCount,
+    });
 
-    if (loginCookies && loginCookies.length > 0) {
+    if (logins.loginCount()) {
         maxConcurrency = cookiesPerConcurrency;
-        loginCount = Array.isArray(loginCookies[0]) ? loginCookies.length : 1;
-        Apify.utils.log.warning(`Cookies were used, setting maxConcurrency to ${maxConcurrency}. Count of available cookies: ${loginCount}!`);
+        Apify.utils.log.warning(`Cookies were used, setting maxConcurrency to ${maxConcurrency}. Count of available cookies: ${logins.loginCount()}!`);
     }
 
+    const proxyConfiguration = await helpers.proxyConfiguration({
+        proxyConfig: proxy,
+        hint: ['RESIDENTIAL'],
+    });
+
     try {
-        if (Apify.isAtHome() && (!proxy || (!proxy.useApifyProxy && !proxy.proxyUrls))) throw errors.proxyIsRequired();
+        if (Apify.isAtHome() && !proxyConfiguration) throw errors.proxyIsRequired();
         if (!resultsType) throw errors.typeIsRequired();
         if (!Object.values(SCRAPE_TYPES).includes(resultsType)) throw errors.unsupportedType(resultsType);
-        if (SCRAPE_TYPES.COOKIES === resultsType && (!loginUsername || !loginPassword)) throw errors.credentialsRequired();
         if (loginUsername && loginPassword && SCRAPE_TYPES.COOKIES !== resultsType) {
-            Apify.utils.log.warning('You provided username and password but will be ignored');
+            throw new Error('You provided username and password without setting "What to scrape from each page" to Cookies.\n\nRemove the login information if you already filled the Login Cookies field');
         }
     } catch (error) {
         Apify.utils.log.info('--  --  --  --  --');
@@ -78,17 +88,32 @@ Apify.main(async () => {
         process.exit(1);
     }
 
-    if (proxy && proxy.useApifyProxy && (!proxy.apifyProxyGroups || !proxy.apifyProxyGroups.includes('RESIDENTIAL'))) {
-        Apify.utils.log.warning('You are using Apify proxy but not the RESIDENTIAL group! It is very likely it will not work properly. Please contact support@apify.com for access to residential proxy.');
+    // Datacenter is more stable when using login
+    if (!logins.loginCount() && proxyConfiguration && !proxyConfiguration?.groups?.includes('RESIDENTIAL')) {
+        Apify.utils.log.warning(`--------
+        You are using Apify proxy but not the RESIDENTIAL group! It is very likely it will not work properly.
+        Please contact support@apify.com for access to residential proxy.
+--------`);
     }
 
-    const proxyConfiguration = await Apify.createProxyConfiguration(proxy);
+    const doRequest = helpers.createGotRequester({
+        proxyConfiguration,
+    });
+
     let urls;
-    if (Array.isArray(directUrls) && directUrls.length > 0) {
+    if (resultsType === SCRAPE_TYPES.COOKIES) {
+        if (loginUsername && loginPassword) {
+            log.info('Will extract login information from username/password');
+            urls = ['https://www.instagram.com'];
+        } else {
+            throw new Error('Result type is set to Cookies, but no username and password were provided');
+        }
+    } else if (Array.isArray(directUrls) && directUrls.length > 0) {
         Apify.utils.log.warning('Search is disabled when Direct URLs are used');
         urls = directUrls;
-    } else {
-        urls = await searchUrls(input, proxyConfiguration);
+    } else if (resultsType !== SCRAPE_TYPES.COOKIES) {
+        // don't search when doing cookies
+        urls = await searchUrls(input, doRequest);
     }
 
     const requestListSources = urls.map((url) => ({
@@ -103,19 +128,17 @@ Apify.main(async () => {
     console.dir(requestListSources);
 
     if (requestListSources.length === 0) {
-        Apify.utils.log.info('No URLs to process');
-        process.exit(0);
+        throw new Error('No URLs to process');
     }
 
     const requestQueue = await Apify.openRequestQueue();
-
     const requestList = await Apify.openRequestList('request-list', requestListSources);
+
     // keeps JS and CSS in a memory cache, since request interception disables cache
     const memoryCache = resourceCache([
         /static\/bundles/,
     ]);
 
-    // TODO: Move everything here
     const extendOutputFunction = await extendFunction({
         output: async (data) => {
             await Apify.pushData(data);
@@ -123,7 +146,8 @@ Apify.main(async () => {
         input,
         key: 'extendOutputFunction',
         helpers: {
-
+            helpers,
+            logins,
         },
     });
 
@@ -133,375 +157,437 @@ Apify.main(async () => {
         key: 'extendScraperFunction',
         helpers: {
             requestQueue,
+            helpers,
+            logins,
         },
     });
 
-    /**
-     * Fix prenav hook
-     * @type {any}
-     */
-    const preNavigationHook = async ({ request, page, session }) => {
-        await page.setBypassCSP(true);
-
-        /* not sure if this can be any helpful
-        await page.setViewport({
-            ..._.sample([{
-                width: 1920,
-                height: 1080,
-            }, {
-                width: 1366,
-                height: 768,
-            }, {
-                width: 1440,
-                height: 900,
-            }]),
-            isMobile: false,
-            deviceScaleFactor: _.sample([1, 2, 4]),
-        });
-        */
-
-        if (loginUsername && loginPassword && resultsType === SCRAPE_TYPES.COOKIES) {
-            await login(loginUsername, loginPassword, page);
-            const cookies = await page.cookies();
-
-            await Apify.setValue('OUTPUT', cookies);
-
-            Apify.utils.log.info('\n-----------\n\nCookies saved, check OUTPUT in the key value store\n\n-----------\n');
-            return null;
-        }
-
-        if (loginCount > 0) {
-            const cookies = [
-                ...session.getPuppeteerCookies('https://instagram.com'),
-                ...session.getPuppeteerCookies('https://www.instagram.com'),
-            ];
-
-            if (cookies.length) {
-                // page.cookies / getPuppeteerCookies have different settings for domain
-                // DO NOT REMOVE THIS
-                await page.setCookie(...cookies
-                    .filter((s) => `${s.domain}`.includes('instagram'))
-                    .map((s) => ({ ...s, domain: '.instagram.com' })));
-            }
-        }
-
-        if (!checkProxyIp) {
-            await Apify.utils.puppeteer.blockRequests(page, {
-                urlPatterns: [
-                    '.ico',
-                    '.mp4',
-                    '.avi',
-                    '.webp',
-                    '.svg',
-                ],
-                extraUrlPatterns: ABORT_RESOURCE_URL_INCLUDES,
-            });
-        }
-
-        // Request interception disables chromium cache, implement in-memory cache for
-        // resources, will save literal MBs of traffic https://help.apify.com/en/articles/2424032-cache-responses-in-puppeteer
-        await page.setRequestInterception(true);
-
-        const { pageType } = request.userData;
-        Apify.utils.log.info(`Opening page type: ${pageType} on ${request.url}`);
-
-        // Old code to keep consumption low for Lafl
-        if (blockMoreAssets) {
-            console.log('Blocking more assets')
-            const isScrollPage = resultsType === SCRAPE_TYPES.POSTS || resultsType === SCRAPE_TYPES.COMMENTS;
-            page.on('request', (req) => {
-                // We need to load some JS when we want to scroll
-                // Hashtag & place pages seems to require even more JS allowed but this needs more research
-                // Stories needs JS files
-                const isJSBundle = req.url().includes('instagram.com/static/bundles/');
-                const abortJSBundle = isScrollPage
-                    ? (!ABORT_RESOURCE_URL_DOWNLOAD_JS.some((urlMatch) => req.url().includes(urlMatch))
-                        && ![PAGE_TYPES.HASHTAG, PAGE_TYPES.PLACE].includes(pageType))
-                    : true;
-
-                if (
-                    ABORT_RESOURCE_TYPES.includes(req.resourceType())
-                    || ABORT_RESOURCE_URL_INCLUDES.some((urlMatch) => req.url().includes(urlMatch))
-                    || (isJSBundle && abortJSBundle && pageType)
-                ) {
-                    // log.debug(`Aborting url: ${req.url()}`);
-                    return req.abort();
-                }
-                // log.debug(`Processing url: ${req.url()}`);
-                req.continue();
-            });
-        } else {
-            // Main path, code made by Paulo, works well for worksloads that can be cached
-            await memoryCache(page);
-        }
-
-        page.on('response', async (response) => {
-            const responseUrl = response.url();
-
-            // Skip non graphql responses
-            if (!responseUrl.startsWith(GRAPHQL_ENDPOINT)) return;
-
-            // Wait for the page to parse it's data
-            while (!page.itemSpec) await sleep(100);
-
-            try {
-                switch (resultsType) {
-                    case SCRAPE_TYPES.POSTS:
-                        await handlePostsGraphQLResponse({ page, response, scrollingState });
-                        break;
-                    case SCRAPE_TYPES.COMMENTS:
-                        await handleCommentsGraphQLResponse({ page, response, scrollingState });
-                        break;
-                }
-            } catch (e) {
-                Apify.utils.log.error(`Error happened while processing response: ${e.message}`);
-                console.log(e.stack);
-            }
-        });
-
-        // make sure the post page don't scroll outside when scrolling for comments,
-        // otherwise it will hang forever
-        await page.evaluateOnNewDocument((pageType) => {
-            window.addEventListener('load', () => {
-                const closeModal = () => {
-                    document.body.style.overflow = 'auto';
-
-                    const cookieModalButton = document.querySelectorAll('[role="presentation"] [role="dialog"] button:first-of-type');
-
-                    if (cookieModalButton.length) {
-                        for (const button of cookieModalButton) {
-                            if (!button.closest('#loginForm')) {
-                                button.click();
-                            } else {
-                                const loginModal = button.closest('[role="presentation"]');
-                                if (loginModal) {
-                                    loginModal.remove();
-                                }
-                            }
-                        }
-                    } else {
-                        setTimeout(closeModal, 1000);
-                    }
-                };
-
-                setTimeout(closeModal, 3000);
-            });
-        }, request.userData.pageType);
-    };
-
-    /**
-     * @type {Apify.PuppeteerHandlePage}
-     */
-    const handlePageFunction = async ({ page, request, response, session }) => {
-        if (checkProxyIp) {
-            await page.setBypassCSP(true);
-            const { clientIp } = await page.evaluate(async () => {
-                return fetch('https://api.apify.com/v2/browser-info').then((res) => res.json());
-            });
-            console.log(`Opening page from IP: ${clientIp}`);
-        }
-
-        if (loginCount > 0) {
-            try {
-                await page.waitForFunction(() => {
-                    return !!(window._sharedData
-                        && window._sharedData.config
-                        && window._sharedData.config.viewerId);
-                }, { timeout: 15000 });
-
-                const viewerId = await page.evaluate(() => window._sharedData.config.viewerId);
-
-                if (!viewerId) {
-                    // choose other cookie from store or exit if no other available
-                    session.markBad();
-
-                    if (!loginSessions.find((s) => s.isUsable())) {
-                        session.retire();
-                        throw new Error('Failed to log in using cookies, they are probably no longer usable and you need to set new ones.');
-                    } else {
-                        Apify.utils.log.error('No login cookies available.');
-                        process.exit(1);
-                    }
-                } else {
-                    session.markGood();
-                }
-            } catch (loginError) {
-                Apify.utils.log.error(loginError);
-                throw new Error('Page didn\'t load properly with login, retrying...');
-            }
-        }
-        if (SCRAPE_TYPES.COOKIES === resultsType) return;
-        const proxyUrl = proxyConfiguration ? proxyConfiguration.newUrl(session.id) : undefined;
-
-        // this can randomly happen
-        if (!response) {
-            throw new Error('Response is undefined');
-        }
-
-        if (response.status() === 404) {
-            Apify.utils.log.error(`Page "${request.url}" does not exist.`);
-            return;
-        }
-        const error = await page.$('body.p-error');
-        if (error) {
-            Apify.utils.log.error(`Page "${request.url}" is private and cannot be displayed.`);
-            return;
-        }
-
-        // eslint-disable-next-line no-underscore-dangle
-        await page.waitForFunction(() => (!window.__initialData.pending && window.__initialData && window.__initialData.data), { timeout: 20000 });
-        // eslint-disable-next-line no-underscore-dangle
-        const { pending, data } = await page.evaluate(() => window.__initialData);
-        const additionalData = await page.evaluate(() => {
-            try {
-                return Object.values(window.__additionalData)[0].data;
-            } catch (e) {
-                return {};
-            }
-        });
-
-        if (pending) throw new Error('Page took too long to load initial data, trying again.');
-        if (!data || !data.entry_data) throw new Error('Page does not contain initial data, trying again.');
-
-        const { entry_data: entryData } = data;
-
-        if (entryData.LoginAndSignupPage) {
-            session.retire();
-            throw errors.redirectedToLogin();
-        }
-
-        const itemSpec = getItemSpec(entryData, additionalData);
-        // Passing the limit around
-        itemSpec.limit = resultsLimit || 999999;
-        itemSpec.scrapePostsUntilDate = scrapePostsUntilDate;
-        itemSpec.input = input;
-        itemSpec.scrollWaitSecs = scrollWaitSecs;
-
-        // interact with page
-        await extendScraperFunction(undefined, {
-            page,
-            request,
-            itemSpec,
-        });
-
-        if (request.userData.label === 'postDetail') {
-            const result = scrapePost(request, itemSpec, entryData, additionalData);
-
-            await Apify.pushData(result);
-        } else {
-            page.itemSpec = itemSpec;
-            try {
-                switch (resultsType) {
-                    case SCRAPE_TYPES.POSTS:
-                        await scrapePosts({ page, request, itemSpec, entryData, input, scrollingState, session });
-                        break;
-                    case SCRAPE_TYPES.COMMENTS:
-                        await scrapeComments({ page, request, additionalData, itemSpec, entryData, scrollingState, session });
-                        break;
-                    case SCRAPE_TYPES.DETAILS:
-                        await scrapeDetails({
-                            input,
-                            request,
-                            itemSpec,
-                            data,
-                            page,
-                            proxy,
-                            includeHasStories,
-                            proxyUrl,
-                        });
-                        break;
-                    case SCRAPE_TYPES.STORIES:
-                        await scrapeStories({ request, page, data, proxyUrl });
-                        break;
-                    default:
-                        throw new Error('Not supported');
-                }
-            } catch (e) {
-                Apify.utils.log.debug('Retiring browser', { url: request.url });
-                session.retire();
-                throw e;
-            }
-        }
-    };
-
-    /**
-     * @type {Apify.Session[]}
-     */
-    const loginSessions = [];
-
-    /**
-     * @param {Parameters<Apify.Session['setPuppeteerCookies']>[0]} cookies
-     * @param {Apify.SessionPool} sessionPool
-     */
-    const setLoginSession = (cookies, sessionPool) => {
-        const newSession = new Apify.Session({
-            sessionPool,
-            maxErrorScore: maxErrorCount,
-            maxUsageCount: 50000,
-        });
-
-        newSession.setPuppeteerCookies(cookies, 'https://instagram.com');
-
-        loginSessions.push(newSession);
-    };
+    const headerGenerator = new HeaderGenerator({
+        browsers: [
+            { name: 'chrome', minVersion: 87 },
+        ],
+        devices: [
+            'desktop',
+        ],
+        operatingSystems: process.platform === 'win32'
+            ? ['windows']
+            : ['linux'],
+    });
 
     const crawler = new Apify.PuppeteerCrawler({
         requestList,
         requestQueue,
-        persistCookiesPerSession: true,
+        persistCookiesPerSession: false,
         useSessionPool: true,
-        preNavigationHooks: [preNavigationHook],
+        preNavigationHooks: [async ({ request, page, session }, gotoOptions) => {
+            const locale = new URL(request.url).searchParams.get('hl');
+
+            await page.setUserAgent(headerGenerator.getHeaders({ locales: locale ? [locale] : [] })['user-agent']);
+
+            gotoOptions.waitUntil = 'domcontentloaded';
+
+            await page.setBypassCSP(true);
+
+            if (loginUsername && loginPassword && resultsType === SCRAPE_TYPES.COOKIES) {
+                await login(loginUsername, loginPassword, page);
+                await Apify.setValue('OUTPUT', await page.cookies());
+
+                Apify.utils.log.info('\n-----------\n\nCookies saved, check OUTPUT in the key value store\n\n-----------\n');
+                return;
+            }
+
+            if (!(await logins.setCookie(page, session))) {
+                Apify.utils.log.error('No login cookies available.');
+                await crawler.autoscaledPool?.abort();
+                return;
+            }
+
+            if (!checkProxyIp) {
+                await Apify.utils.puppeteer.blockRequests(page, {
+                    urlPatterns: [
+                        '.ico',
+                        '.mp4',
+                        '.avi',
+                        '.webp',
+                        '.svg',
+                    ],
+                    extraUrlPatterns: ABORT_RESOURCE_URL_INCLUDES,
+                });
+            }
+
+            // make sure the post page don't scroll outside when scrolling for comments,
+            // otherwise it will hang forever. place the additionalData back
+            await page.evaluateOnNewDocument((pageType) => {
+                window.__bufferedErrors = window.__bufferedErrors || [];
+
+                window.addEventListener('load', () => {
+                    let loaded = false;
+                    let tries = 0;
+
+                    const patched = (path, data) => {
+                        loaded = true;
+                        window.__additionalData = {
+                            [path]: { data },
+                        };
+                    };
+
+                    const patch = () => {
+                        for (const script of document.querySelectorAll('script')) {
+                            if (script.innerHTML.includes('window.__additionalDataLoaded(')) {
+                                try {
+                                    window.__additionalDataLoaded = patched;
+                                    window.eval(script.innerHTML);
+                                } catch (e) {}
+                            }
+                        }
+
+                        if (!loaded && tries++ < 30) {
+                            setTimeout(patch, 300);
+                        }
+                    };
+
+                    setTimeout(patch);
+
+                    const closeModal = () => {
+                        document.body.style.overflow = 'auto';
+
+                        const cookieModalButton = document.querySelectorAll('[role="presentation"] [role="dialog"] button:first-of-type');
+
+                        if (cookieModalButton.length) {
+                            for (const button of cookieModalButton) {
+                                if (!button.closest('#loginForm')) {
+                                    button.click();
+                                } else {
+                                    const loginModal = button.closest('[role="presentation"]');
+                                    if (loginModal) {
+                                        loginModal.remove();
+                                    }
+                                }
+                            }
+                        } else {
+                            setTimeout(closeModal, 1000);
+                        }
+                    };
+
+                    setTimeout(closeModal, 3000);
+                });
+            }, request.userData.pageType);
+
+            // Request interception disables chromium cache, implement in-memory cache for
+            // resources, will save literal MBs of traffic https://help.apify.com/en/articles/2424032-cache-responses-in-puppeteer
+            await page.setRequestInterception(true);
+
+            const { pageType } = request.userData;
+            Apify.utils.log.info(`Opening page type: ${pageType} on ${request.url}`);
+
+            // Old code to keep consumption low for Lafl
+            if (blockMoreAssets) {
+                console.log('Blocking more assets');
+                const isScrollPage = resultsType === SCRAPE_TYPES.POSTS || resultsType === SCRAPE_TYPES.COMMENTS;
+                page.on('request', (req) => {
+                    // We need to load some JS when we want to scroll
+                    // Hashtag & place pages seems to require even more JS allowed but this needs more research
+                    // Stories needs JS files
+                    const isJSBundle = req.url().includes('instagram.com/static/bundles/');
+                    const abortJSBundle = isScrollPage
+                        ? (!ABORT_RESOURCE_URL_DOWNLOAD_JS.some((urlMatch) => req.url().includes(urlMatch))
+                            && ![PAGE_TYPES.HASHTAG, PAGE_TYPES.PLACE].includes(pageType))
+                        : true;
+
+                    if (
+                        ABORT_RESOURCE_TYPES.includes(req.resourceType())
+                        || ABORT_RESOURCE_URL_INCLUDES.some((urlMatch) => req.url().includes(urlMatch))
+                        || (isJSBundle && abortJSBundle && pageType)
+                    ) {
+                        // log.debug(`Aborting url: ${req.url()}`);
+                        return req.abort();
+                    }
+                    // log.debug(`Processing url: ${req.url()}`);
+                    req.continue();
+                });
+            } else {
+                // Main path, code made by Paulo, works well for worksloads that can be cached
+                await memoryCache(page);
+            }
+
+            let waitingTries = 1000;
+
+            page.on('response', async (response) => {
+                try {
+                    const responseUrl = response.url();
+
+                    if (!page.itemSpec) {
+                        // Wait for the page to parse it's data
+                        while (!page.itemSpec && waitingTries-- > 0) {
+                            await sleep(100);
+                        }
+
+                        if (waitingTries <= 0) {
+                            // it was stuck forever
+                            return;
+                        }
+                    }
+
+                    if (responseUrl.startsWith(GRAPHQL_ENDPOINT)) {
+                        switch (resultsType) {
+                            case SCRAPE_TYPES.POSTS:
+                                await handlePostsGraphQLResponse({
+                                    page,
+                                    response,
+                                    scrollingState,
+                                    extendOutputFunction,
+                                });
+                                break;
+                            case SCRAPE_TYPES.COMMENTS:
+                                await handleCommentsGraphQLResponse({
+                                    page,
+                                    response,
+                                    scrollingState,
+                                    extendOutputFunction,
+                                });
+                                break;
+                            default:
+                        }
+                    } else if (responseUrl.startsWith(V1_ENDPOINT)) {
+                        // mostly for locations
+                        switch (resultsType) {
+                            case SCRAPE_TYPES.POSTS: {
+                                const entryData = await response.json();
+
+                                await scrapePosts({
+                                    additionalData: {},
+                                    entryData,
+                                    page,
+                                    itemSpec: page.itemSpec,
+                                    extendOutputFunction,
+                                    resultsType,
+                                    requestQueue,
+                                    scrollingState,
+                                    fromResponse: true,
+                                });
+                                break;
+                            }
+                            default:
+                        }
+                    }
+                } catch (e) {
+                    // throwing here would be the death of the run
+                    Apify.utils.log.debug(`Error happened while processing response`, {
+                        url: request.url,
+                        error: e.message,
+                    });
+                }
+            });
+        }],
         maxRequestRetries,
         launchContext: {
             stealth: useStealth,
             useChrome: typeof useChrome === 'boolean' ? useChrome : Apify.isAtHome(),
-            launchOptions: {
-                ignoreHTTPSErrors: true,
-                args: [
-                    '--enable-features=NetworkService',
-                    '--ignore-certificate-errors',
-                    '--disable-blink-features=AutomationControlled', // removes webdriver from window.navigator
-                ],
-            },
         },
         browserPoolOptions: {
-            // TODO: Review and fix this in SDK 1
-            // useIncognitoPages: true,
             maxOpenPagesPerBrowser: 1,
+            preLaunchHooks: [async (pageId, launchContext) => {
+                const { request } = crawler.crawlingContexts.get(pageId);
+
+                const locale = new URL(request.url).searchParams.get('hl');
+
+                launchContext.launchOptions = {
+                    ...launchContext.launchOptions,
+                    bypassCSP: true,
+                    ignoreHTTPSErrors: true,
+                    devtools: input.debugLog,
+                    locale,
+                };
+            }],
+            postPageCloseHooks: [async (pageId, browserController) => {
+                if (browserController?.launchContext?.session?.isUsable() === false) {
+                    log.debug('Session not usable, closing browser');
+                    await browserController.close();
+                }
+            }],
         },
         sessionPoolOptions: {
-            // eslint-disable-next-line no-nested-ternary
-            maxPoolSize: loginCount > 0 ? loginCount : (resultsType === SCRAPE_TYPES.COOKIES ? 1 : undefined),
-            async createSessionFunction(sessionPool) {
-                if (loginCount > 0) {
-                    if (!loginSessions.length) {
-                        if (Array.isArray(loginCookies[0])) {
-                            for (const cookies of loginCookies) {
-                                setLoginSession(cookies, sessionPool);
-                            }
-                        } else {
-                            setLoginSession(loginCookies, sessionPool);
-                        }
-                    }
-
-                    const foundSession = loginSessions.find((s) => s.isUsable());
-
-                    if (foundSession) {
-                        return foundSession;
-                    }
-                }
-
-                return new Apify.Session({
-                    sessionPool,
-                });
+            sessionOptions: {
+                maxUsageCount: logins.loginCount()
+                    ? 10000
+                    : undefined,
+                maxErrorScore: logins.loginCount()
+                    ? maxErrorCount
+                    : 0.5,
             },
+            // eslint-disable-next-line no-nested-ternary
+            maxPoolSize: logins.loginCount() > 0
+                ? logins.loginCount()
+                : (resultsType === SCRAPE_TYPES.COOKIES ? 1 : undefined),
         },
-        proxyConfiguration: proxyConfiguration || undefined,
+        proxyConfiguration,
         maxConcurrency,
         handlePageTimeoutSecs: 300 * 60, // Ex: 5 hours to crawl thousands of comments
-        handlePageFunction,
-        handleFailedRequestFunction: async ({ request }) => {
-            Apify.utils.log.error(`${request.url}: Request ${request.url} failed ${maxRequestRetries + 1} times, not retrying any more`);
+        handlePageFunction: async ({ page, request, response, session }) => {
+            if (checkProxyIp) {
+                await page.setBypassCSP(true);
+                const { clientIp } = await page.evaluate(async () => {
+                    return fetch('https://api.apify.com/v2/browser-info').then((res) => res.json());
+                });
+                console.log(`Opening page from IP: ${clientIp}`);
+            }
+
+            if (logins.hasSession(session)) {
+                try {
+                    await page.waitForFunction(() => {
+                        return !!(window?._sharedData?.config?.viewerId);
+                    }, { timeout: 15000 });
+
+                    const viewerId = await page.evaluate(() => window?._sharedData?.config?.viewerId);
+
+                    if (!viewerId) {
+                        // choose other cookie from store or exit if no other available
+                        logins.increaseError(session);
+
+                        if (!logins.isUsable(session)) {
+                            session.retire();
+                            throw new Error('Failed to log in using cookies, they are probably no longer usable and you need to set new ones.');
+                        }
+                    } else {
+                        logins.decreaseError(session);
+                    }
+                } catch (loginError) {
+                    Apify.utils.log.exception(loginError, 'Login failed');
+                    throw new Error('Page didn\'t load properly with login, retrying...');
+                }
+            }
+
+            if (SCRAPE_TYPES.COOKIES === resultsType) return;
+
+            // this can randomly happen
+            if (!response) {
+                throw new Error('Response is undefined');
+            }
+
+            if (response.status() === 404) {
+                Apify.utils.log.error(`Page "${request.url}" does not exist.`);
+                return;
+            }
+            const error = await page.$('body.p-error');
+            if (error) {
+                Apify.utils.log.error(`Page "${request.url}" is private and cannot be displayed.`);
+                return;
+            }
+
+            await page.waitForFunction(() => {
+                // eslint-disable-next-line no-underscore-dangle
+                return (!(window?.__initialData?.pending)
+                    && window?.__initialData?.data);
+            }, { timeout: 20000 });
+
+            try {
+                // this happens in the evaluateOnNewDocument, so we wait a bit
+                await page.waitForFunction(() => {
+                    return (Object.keys(window?.__additionalData ?? {}).length > 0);
+                }, { timeout: 10000 });
+            } catch (e) {
+                log.debug('Additional data', { url: request.url, e: e.message });
+            }
+
+            // eslint-disable-next-line no-underscore-dangle
+            const { pending, data } = await page.evaluate(() => window.__initialData);
+            const additionalData = await page.evaluate(() => {
+                try {
+                    return Object.values(window.__additionalData)[0].data;
+                } catch (e) {
+                    return {};
+                }
+            });
+
+            if (pending) throw new Error('Page took too long to load initial data, trying again.');
+            if (!data || !data.entry_data) throw new Error('Page does not contain initial data, trying again.');
+
+            const { entry_data: entryData } = data;
+
+            if (entryData.LoginAndSignupPage) {
+                session.retire();
+                throw errors.redirectedToLogin();
+            }
+
+            const itemSpec = getItemSpec(entryData, additionalData);
+            // Passing the limit around
+            itemSpec.limit = resultsLimit || 999999;
+            itemSpec.scrapePostsUntilDate = scrapePostsUntilDate;
+            itemSpec.input = input;
+            itemSpec.scrollWaitSecs = scrollWaitSecs;
+
+            // interact with page
+            await extendScraperFunction(undefined, {
+                page,
+                request,
+                itemSpec,
+            });
+
+            if (request.userData.label === 'postDetail') {
+                const result = scrapePost(request, itemSpec, entryData, additionalData);
+
+                await extendOutputFunction(result, {
+                    label: 'post',
+                });
+            } else {
+                page.itemSpec = itemSpec;
+                try {
+                    switch (resultsType) {
+                        case SCRAPE_TYPES.POSTS:
+                            await scrapePosts({
+                                page,
+                                itemSpec,
+                                additionalData,
+                                entryData,
+                                scrollingState,
+                                extendOutputFunction,
+                                requestQueue,
+                                resultsType,
+                                fromResponse: false,
+                            });
+                            break;
+                        case SCRAPE_TYPES.COMMENTS:
+                            await scrapeComments({
+                                page,
+                                additionalData,
+                                itemSpec,
+                                entryData,
+                                scrollingState,
+                                extendOutputFunction,
+                            });
+                            break;
+                        case SCRAPE_TYPES.DETAILS:
+                            await scrapeDetails({
+                                input,
+                                request,
+                                itemSpec,
+                                data,
+                                page,
+                                extendOutputFunction,
+                                includeHasStories,
+                            });
+                            break;
+                        case SCRAPE_TYPES.STORIES:
+                            await scrapeStories({
+                                request,
+                                page,
+                                data,
+                                extendOutputFunction,
+                            });
+                            break;
+                        default:
+                            throw new Error('Not supported');
+                    }
+                } catch (e) {
+                    Apify.utils.log.debug('Retiring browser', { url: request.url });
+                    session.retire();
+                    throw e;
+                }
+            }
+        },
+        handleFailedRequestFunction: async ({ request, error }) => {
+            Apify.utils.log.exception(error, `${request.url}: Request failed ${maxRequestRetries + 1} times, not retrying any more`);
+
             await Apify.pushData({
                 '#debug': Apify.utils.createRequestDebugInfo(request),
                 '#error': request.url,
@@ -509,13 +595,9 @@ Apify.main(async () => {
         },
     });
 
-    await crawler.run();
-
-    if (loginSessions.length > 0) {
-        const invalid = loginSessions.reduce((count, session) => (count + (!session.isUsable() ? 1 : 0)), 0);
-
-        if (invalid) {
-            Apify.utils.log.warning(`Invalid cookies count: ${invalid}`);
-        }
+    if (!debugLog) {
+        helpers.patchLog(crawler);
     }
+
+    await crawler.run();
 });

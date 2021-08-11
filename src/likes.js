@@ -1,8 +1,16 @@
+// eslint-disable-next-line no-unused-vars
+const Puppeteer = require('puppeteer');
 const { log, finiteQuery } = require('./helpers');
 const { QUERY_IDS } = require('./query_ids');
 
 const { postLikesQueryId } = QUERY_IDS;
 
+/**
+ *
+ * @param {Puppeteer.Page} page
+ * @param {any} itemSpec
+ * @param {any} input
+ */
 async function getPostLikes(page, itemSpec, input) {
     const limit = input.likedByLimit;
     if (!limit || limit === 0) return [];
@@ -26,14 +34,22 @@ async function getPostLikes(page, itemSpec, input) {
             };
         });
         return { nextPageCursor: endCursor, data: likes };
-    }
+    };
 
     const variables = {
         shortcode: itemSpec.id,
         include_reel: false,
     };
 
-    return finiteQuery(postLikesQueryId, variables, nodeTransformationFunction, limit, page, input, itemSpec, '[post likes]');
+    return finiteQuery(
+        postLikesQueryId,
+        variables,
+        nodeTransformationFunction,
+        limit,
+        page,
+        input,
+        '[post likes]',
+    );
 }
 
 module.exports = {
