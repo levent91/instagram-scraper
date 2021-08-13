@@ -873,6 +873,24 @@ const proxyConfiguration = async ({
 };
 
 /**
+ * Patch input. Mutates the object
+ *
+ * @param {any} input
+ */
+const patchInput = (input) => {
+    if (input) {
+        if (typeof input.extendOutputFunction === 'string' && input.extendOutputFunction.startsWith('($)')) {
+            // old extend output function, rewrite it to use the new format that will be
+            // picked by the extendFunction helper
+            Apify.utils.log.warning(`\n-------\nYour "extendOutputFunction" parameter is wrong, so it's being defaulted to a working one. Please change it to conform to the proper format or leave it empty\n-------\n`);
+            input.extendOutputFunction = 'async ({ item }) => { return item; }';
+        }
+    }
+};
+
+/**
+ * No handleRequestFunction errors
+ *
  * @param {Apify.BrowserCrawler} crawler
  */
 const patchLog = (crawler) => {
@@ -902,4 +920,5 @@ module.exports = {
     proxyConfiguration,
     createGotRequester,
     patchLog,
+    patchInput,
 };

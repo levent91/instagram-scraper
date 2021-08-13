@@ -68,6 +68,7 @@ const scrapeStories = async ({ request, page, data, extendOutputFunction }) => {
 
         await extendOutputFunction(stories, {
             label: 'stories',
+            page,
         });
     } else {
         throw storiesNotLoaded(reelId);

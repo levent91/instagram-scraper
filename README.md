@@ -28,7 +28,7 @@ The Instagram data scraper supports the following features:
 
 - Scrape likes - you can scrape likes from any post (if logged in)
 
-If you want to know more about how the Instagram Scraper works, here's a short introduction on the [Apify blog](https://medium.com/p/21d05506aeb3).
+If you want to know more about how the Instagram Scraper works, here's a short introduction on the [Apify blog](https://blog.apify.com/scrape-instagram-posts-comments-and-more-21d05506aeb3/).
 
 ## Cost of usage
 
@@ -52,10 +52,6 @@ Scraping **1000 profiles** requires about:
 
 Based on Apify's pricing at the time of writing, scraping **1000 profiles** would cost 10 CU * $0.25 + 0.24 GB * 12.5 GB which is a total of **$5.5**. The Personal plan ($49) would allow you to scrape about 9000 Instagram profiles monthly.
 
-## Scrolling through large profiles or posts
-
-Instagram imposes rate limits that will block scrolling if you want to scroll for more than 1000 posts or comments. To work around this issue, the scraper starts injecting randomized wait times once you reach 1000 posts or comments. This is configurable by means of the `scrollWaitSecs` input parameter. If you get the message that you were rate limited, consider increasing this parameter for the specific profile or post.
-
 ## Input parameters
 
 The input of this scraper should be JSON containing the list of pages on Instagram that should be visited. Required fields are:
@@ -78,26 +74,28 @@ The input of this scraper should be JSON containing the list of pages on Instagr
 | followedByLimit | Number | (optional) How many followers should be scraped from profile page (only works with login) |
 | expandOwners | Boolean | (optional) **!Experimental!** Load additional details about post owner for each post (slows down the solution a lot) |
 
-This solution requires the use of **Proxy servers**, either your own proxy servers or you can use <a href="https://www.apify.com/docs/proxy">Apify Proxy</a>.
+This solution requires the use of **Proxy servers**, either your own proxy servers or you can use [Apify Proxy](https://apify.com/proxy).
+
+## Scrolling through large profiles or posts
+
+Instagram imposes rate limits that will block scrolling if you want to scroll for more than 1000 posts or comments. To work around this issue, the scraper starts injecting randomized wait times once you reach 1000 posts or comments. This is configurable by means of the `scrollWaitSecs` input parameter. If you get the message that you were rate limited, consider increasing this parameter for the specific profile or post.
 
 ### Instagram scraper Input example
 
-```json
+```jsonc
 {
     "search": "Náměstí míru",
     "searchType": "place",
     "searchLimit": 10,
-    "directUrls": [ "https://www.instagram.com/teslamotors/" ],
     "resultsType": "posts",
     "resultsLimit": 100,
-    "proxy": { "useApifyProxy": true, "apifyProxyGroups": [] }
+    "proxy": { "useApifyProxy": true, "apifyProxyGroups": ["RESIDENTIAL"] }
 }
-
 ```
 
 ## During the actor run
 
-During the run, the actor will output messages letting you know what is going on. Each message always contains a short label specifying which page from the provided list is currently being scraped. When items are loaded from the page, you should see a message about this event with a loaded item count and total item count for each page.
+During the run, the actor will output messages letting you know what is going on. Each message always contains a short label specifying which page from the provided list is currently being scraped. When items are loaded from the page, you should see a message about this event with a loaded item count and total item count for each page, in most cases.
 
 If you provide incorrect input to the actor, it will immediately stop with failure state and output an explanation of what is wrong.
 
@@ -113,17 +111,40 @@ log in with the account you want to use and then use the extension to export coo
 
 **If you log out of the Instagram account that is connected to the cookies, it will invalidate them and your solution will stop working.**
 
+You can also provide your username and password as input and set the "What to scrape from each page" to be "Cookies".
+You'll need to provide a 2FA code (SMS or email) to continue with the login by going to the "Live View" tab of your run when instructed to do so:
+
+```
+ _____  _
+|  __ \| |
+| |__) | | ___  __ _ ___  ___    ___  _ __   ___ _ __
+|  ___/| |/ _ \/ _` / __|/ _ \  / _ \| '_ \ / _ \ '_ \
+| |    | |  __/ (_| \__ \  __/ | (_) | |_) |  __/ | | |
+|_|    |_|\___|\__,_|___/\___|  \___/| .__/ \___|_| |_|
+                                     | |
+                                     |_|
+
+ _ _                   _
+| (_)                 (_)
+| |___   _____  __   ___  _____      __
+| | \ \ / / _ \ \ \ / / |/ _ \ \ /\ / /
+| | |\ V /  __/  \ V /| |  __/\ V  V /
+|_|_| \_/ \___|   \_/ |_|\___| \_/\_/
+```
+
+You'll also need to allow the connection in your Instagram account security settings.
+
 ## Instagram output format
 
 The actor stores its results in a dataset. Each item is a separate item in the dataset.
 
-You can manage the results in any language (Python, PHP, Node JS/NPM). See <a href="https://www.apify.com/docs/api" target="blank">our API reference</a> to learn more about getting results from the Instagram Scraper.
+You can manage the results in any language (Python, PHP, Node JS/NPM). See [our API reference](https://docs.apify.com/api/v2) to learn more about getting results from the Instagram Scraper.
 
 ### Scraped Instagram posts
 
 The structure of each item in Instagram posts when scrolling looks like this:
 
-```json
+```jsonc
 {
   "#debug": {
     "pageType": "user",
@@ -167,7 +188,7 @@ The structure of each item in Instagram posts when scrolling looks like this:
 
 The structure of each item in Instagram comments looks like this:
 
-```json
+```jsonc
 {
   "#debug": {
     "index": 1,
@@ -194,7 +215,7 @@ The structure of each item in Instagram comments looks like this:
 
 The structure of each user profile looks like this:
 
-```json
+```jsonc
 {
   "#debug": {
     "url": "https://www.instagram.com/avengers/"
@@ -261,7 +282,7 @@ The structure of each user profile looks like this:
 
 The structure of each hashtag detail looks like this:
 
-```json
+```jsonc
 {
   "#debug": {
     "url": "https://www.instagram.com/explore/tags/endgame/"
@@ -310,7 +331,7 @@ The structure of each hashtag detail looks like this:
 
 The structure of each place detail looks like this:
 
-```json
+```jsonc
 {
   "#debug": {
     "url": "https://www.instagram.com/explore/locations/1017812091/namesti-miru/"
@@ -372,7 +393,7 @@ The structure of each place detail looks like this:
 
 The structure of each post detail looks like this:
 
-```json
+```jsonc
 {
   "#debug": {
     "requestId": "YCyUc93vUGzK9eA",
@@ -434,6 +455,7 @@ Return `null` to omit the output of the item.
 
 ```js
 async ({ data, item, itemSpec, page, request, customData, label }) => {
+    // data variable is the raw object before parsing, that becomes the item
     delete item.displayResourceUrls;
     item.alt = 'N/A';
     item.additionalField = customData.additionalField; // comes from the input
@@ -453,7 +475,7 @@ async ({ data, item, itemSpec, page, request, customData, label }) => {
             break;
     }
 
-    return item;
+    return item; // return the modified item to be output
 }
 ```
 
@@ -465,6 +487,8 @@ You can split your result into individual items, like to make it CSV friendly or
 ```js
 async ({ data, item, itemSpec, page, request, customData, label }) => {
     if (label === 'details') {
+        // details means it's going to output a profile item
+
         const { latestPosts, ...profile } = item;
         // split the latestPosts one per row, by returning an array
         return latestPosts.map((post) => {
@@ -479,9 +503,45 @@ async ({ data, item, itemSpec, page, request, customData, label }) => {
 }
 ```
 
+## Extend Scraper Function
+
+This parameter allows you to add additional functionalities to the scraper. You can access inner functionalities, add profiles, posts and searches on-the-fly:
+
+```js
+async ({ label, addProfile, addLocation, crawler, Apify }) => {
+    if (label === 'START')  {
+        await addProfile('elonmusk'); // add profile by username
+        await addLocation(274885506); // add location by id, this is prague
+        await addHashtag('prague'); // add hashtag, not using #
+    } else if (label === 'FINISH') {
+        // scraper finished, display stats
+        Apify.utils.log.info('STATS', crawler.stats.toJSON());
+    }
+}
+```
+
+You can interact with the page as well:
+
+```js
+async ({ page, label, response, Apify }) => {
+    if (label === 'HANDLE' && page.itemSpec.pageType === 'post') {
+        // we are inside the handlePageFunction, after every comment is being loaded
+        const spans = await page.$x('//span[@class="EizgU" and contains(.,"View")]');
+        // this is the "View replies" button, will trigger the label below after clicking
+        await Promise.all(spans.map((s) => s.click()));
+    } else if (label === 'RESPONSE' && response.request().url().includes('1ee91c32fc020d44158a3192eda98247')) {
+        // RESPONSE is the event listener for page.on('response')
+        // 1ee91c32fc020d44158a3192eda98247 is the query hash for threaded comments
+        const { data } = await response.json();
+        // deal with the data.comment.edge_threaded_comments.edges array
+        await Apify.pushData(data);
+    }
+}
+```
+
 ## Changelog
 
-This scraper is under active development, so check [CHANGELOG.md](https://github.com/gippy/instagram-scraper/blob/master/CHANGELOG.md) for new features and fixes.
+This scraper is under active development, so check [CHANGELOG.md](./CHANGELOG.md) for new features and fixes.
 
 ## Acknowledgments
 

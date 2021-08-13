@@ -68,6 +68,7 @@ const scrapeComments = async ({ page, itemSpec, entryData, additionalData, scrol
 
         await extendOutputFunction(commentsReadyToPush, {
             label: 'comment',
+            page,
         });
     } else {
         log(itemSpec, 'Waiting for initial data to load');
@@ -138,6 +139,7 @@ async function handleCommentsGraphQLResponse({ page, response, scrollingState, e
 
     await extendOutputFunction(commentsReadyToPush, {
         label: 'comment',
+        page,
     });
 }
 

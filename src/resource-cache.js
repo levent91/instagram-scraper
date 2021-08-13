@@ -52,6 +52,11 @@ const resourceCache = (paths) => {
 
         page.on('request', async (req) => {
             try {
+                if (page.isClosed()) {
+                    page.removeAllListeners('request');
+                    return;
+                }
+
                 const url = req.url();
 
                 if (req.resourceType() === 'image') {
@@ -94,6 +99,11 @@ const resourceCache = (paths) => {
 
         page.on('response', async (res) => {
             try {
+                if (page.isClosed()) {
+                    page.removeAllListeners('response');
+                    return;
+                }
+
                 if (['script', 'stylesheet'].includes(res.request().resourceType())) {
                     const url = res.url();
                     const content = cache.get(url);

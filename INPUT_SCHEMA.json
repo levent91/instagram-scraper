@@ -150,7 +150,7 @@
             "description": "Add or remove properties on the output object or omit the output returning null",
             "type": "string",
             "default": "",
-            "prefill": "async ({ data, item, itemSpec, page, request, customData, label }) => {\n  return item;\n}",
+            "prefill": "async ({ data, item, helpers, page, customData, label }) => {\n  return item;\n}",
             "editor": "javascript",
             "sectionCaption": "Extend scraper functionality",
             "sectionDescription": "You can change the output of the items for your dataset here, or add additional behavior on the scraper."
@@ -160,7 +160,7 @@
             "description": "Advanced function that allows you to extend the default scraper functionality, allowing you to manually perform actions on the page",
             "type": "string",
             "default": "",
-            "prefill": "async ({ page, request, itemSpec, customData, Apify }) => {\n \n}",
+            "prefill": "async ({ page, request, label, response, helpers, requestQueue, logins, addProfile, addPost, addLocation, addHashtag, doRequest, customData, Apify }) => {\n \n}",
             "editor": "javascript"
         },
         "customData": {

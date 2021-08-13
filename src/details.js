@@ -228,6 +228,7 @@ const scrapeDetails = async ({ input, request, itemSpec, data, page, includeHasS
 
     await extendOutputFunction(output, {
         label: 'details',
+        page,
     });
 
     log(itemSpec, 'Page details saved, task finished');
@@ -267,7 +268,29 @@ const loadPublicStories = async ({ page, itemSpec, data }) => {
     }
 };
 
+/**
+ * Add a profile to extract details
+ *
+ * @param {Apify.RequestQueue} requestQueue
+ */
+const createAddProfile = (requestQueue) => {
+    /**
+     * @param {string} username
+     */
+    return async (username) => {
+        const url = new URL(username, 'https://www.instagram.com');
+
+        return requestQueue.addRequest({
+            url: url.toString(),
+            userData: {
+                pageType: PAGE_TYPES.PROFILE,
+            },
+        });
+    };
+};
+
 module.exports = {
     scrapeDetails,
+    createAddProfile,
     formatSinglePost,
 };

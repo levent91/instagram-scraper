@@ -2,11 +2,11 @@ const Apify = require('apify');
 const HeaderGenerator = require('header-generator');
 
 const { resourceCache } = require('./resource-cache');
-const { scrapePosts, handlePostsGraphQLResponse, scrapePost } = require('./posts');
+const { scrapePosts, handlePostsGraphQLResponse, scrapePost, createAddPost } = require('./posts');
 const { scrapeComments, handleCommentsGraphQLResponse } = require('./comments');
 const { scrapeStories } = require('./stories');
-const { scrapeDetails } = require('./details');
-const { searchUrls } = require('./search');
+const { scrapeDetails, createAddProfile } = require('./details');
+const { searchUrls, createHashtagSearch, createLocationSearch } = require('./search');
 const helpers = require('./helpers');
 
 const { getItemSpec, getPageTypeFromUrl, extendFunction } = helpers;
@@ -88,12 +88,20 @@ Apify.main(async () => {
         process.exit(1);
     }
 
-    // Datacenter is more stable when using login
-    if (!logins.loginCount() && proxyConfiguration && !proxyConfiguration?.groups?.includes('RESIDENTIAL')) {
-        Apify.utils.log.warning(`--------
+    if (Apify.isAtHome()) {
+        if (!logins.loginCount() && proxyConfiguration?.usesApifyProxy && proxyConfiguration?.groups?.includes('RESIDENTIAL') === false) {
+            Apify.utils.log.warning(`--------
         You are using Apify proxy but not the RESIDENTIAL group! It is very likely it will not work properly.
         Please contact support@apify.com for access to residential proxy.
 --------`);
+        }
+
+        if (logins.loginCount() && proxyConfiguration?.groups?.includes('RESIDENTIAL') === true) {
+            Apify.utils.log.warning(`--------
+        RESIDENTIAL proxy group when using login cookies is not advised as the location of the IP will keep changing.
+        If the login cookies are getting logged out, try changing to a datacenter proxy.
+--------`);
+        }
     }
 
     const doRequest = helpers.createGotRequester({
@@ -139,6 +147,8 @@ Apify.main(async () => {
         /static\/bundles/,
     ]);
 
+    helpers.patchInput(input);
+
     const extendOutputFunction = await extendFunction({
         output: async (data) => {
             await Apify.pushData(data);
@@ -146,19 +156,32 @@ Apify.main(async () => {
         input,
         key: 'extendOutputFunction',
         helpers: {
+            scrollingState,
             helpers,
             logins,
+            doRequest,
         },
     });
+
+    const addProfile = createAddProfile(requestQueue);
+    const addPost = createAddPost(requestQueue);
+    const addLocation = createLocationSearch(requestQueue);
+    const addHashtag = createHashtagSearch(requestQueue);
 
     const extendScraperFunction = await extendFunction({
         output: async () => {}, // no-op
         input,
         key: 'extendScraperFunction',
         helpers: {
+            scrollingState,
             requestQueue,
             helpers,
             logins,
+            addProfile,
+            addPost,
+            addLocation,
+            addHashtag,
+            doRequest,
         },
     });
 
@@ -273,15 +296,15 @@ Apify.main(async () => {
                 });
             }, request.userData.pageType);
 
-            // Request interception disables chromium cache, implement in-memory cache for
-            // resources, will save literal MBs of traffic https://help.apify.com/en/articles/2424032-cache-responses-in-puppeteer
-            await page.setRequestInterception(true);
-
             const { pageType } = request.userData;
             Apify.utils.log.info(`Opening page type: ${pageType} on ${request.url}`);
 
             // Old code to keep consumption low for Lafl
             if (blockMoreAssets) {
+                // Request interception disables chromium cache, implement in-memory cache for
+                // resources, will save literal MBs of traffic https://help.apify.com/en/articles/2424032-cache-responses-in-puppeteer
+                await page.setRequestInterception(true);
+
                 console.log('Blocking more assets');
                 const isScrollPage = resultsType === SCRAPE_TYPES.POSTS || resultsType === SCRAPE_TYPES.COMMENTS;
                 page.on('request', (req) => {
@@ -370,6 +393,13 @@ Apify.main(async () => {
                             default:
                         }
                     }
+
+                    await extendScraperFunction(undefined, {
+                        label: 'RESPONSE',
+                        request,
+                        response,
+                        page,
+                    });
                 } catch (e) {
                     // throwing here would be the death of the run
                     Apify.utils.log.debug(`Error happened while processing response`, {
@@ -409,7 +439,7 @@ Apify.main(async () => {
         sessionPoolOptions: {
             sessionOptions: {
                 maxUsageCount: logins.loginCount()
-                    ? 10000
+                    ? 100000
                     : undefined,
                 maxErrorScore: logins.loginCount()
                     ? maxErrorCount
@@ -434,6 +464,7 @@ Apify.main(async () => {
 
             if (logins.hasSession(session)) {
                 try {
+                    // takes a while to load on slower proxies
                     await page.waitForFunction(() => {
                         return !!(window?._sharedData?.config?.viewerId);
                     }, { timeout: 15000 });
@@ -516,12 +547,6 @@ Apify.main(async () => {
             itemSpec.input = input;
             itemSpec.scrollWaitSecs = scrollWaitSecs;
 
-            // interact with page
-            await extendScraperFunction(undefined, {
-                page,
-                request,
-                itemSpec,
-            });
 
             if (request.userData.label === 'postDetail') {
                 const result = scrapePost(request, itemSpec, entryData, additionalData);
@@ -582,6 +607,14 @@ Apify.main(async () => {
                     Apify.utils.log.debug('Retiring browser', { url: request.url });
                     session.retire();
                     throw e;
+                } finally {
+                    // interact with page
+                    await extendScraperFunction(undefined, {
+                        page,
+                        request,
+                        response,
+                        label: 'HANDLE',
+                    });
                 }
             }
         },
@@ -595,9 +628,19 @@ Apify.main(async () => {
         },
     });
 
+    await extendScraperFunction(undefined, {
+        label: 'START',
+        crawler,
+    });
+
     if (!debugLog) {
         helpers.patchLog(crawler);
     }
 
     await crawler.run();
+
+    await extendScraperFunction(undefined, {
+        label: 'FINISH',
+        crawler,
+    });
 });

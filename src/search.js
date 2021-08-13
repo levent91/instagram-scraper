@@ -1,5 +1,5 @@
 const Apify = require('apify');
-const { SEARCH_TYPES } = require('./consts');
+const { SEARCH_TYPES, PAGE_TYPES } = require('./consts');
 const errors = require('./errors');
 
 const { log, sleep } = Apify.utils;
@@ -71,6 +71,55 @@ const searchUrls = async (input, request, retries = 0) => {
     return urls;
 };
 
+/**
+ * Add a location search by ID
+ *
+ * @param {Apify.RequestQueue} requestQueue
+ */
+const createLocationSearch = (requestQueue) => {
+    /**
+     * @param {string} locationId
+     */
+    return async (locationId) => {
+        if (+locationId != locationId) {
+            Apify.utils.log.warning(`Location id ${locationId} isn't a valid number`);
+            return;
+        }
+
+        const url = new URL(locationId, 'https://www.instagram.com/explore/locations/');
+
+        return requestQueue.addRequest({
+            url: url.toString(),
+            userData: {
+                pageType: PAGE_TYPES.PLACE,
+            },
+        });
+    };
+};
+
+/**
+ * Add a hashtag search
+ *
+ * @param {Apify.RequestQueue} requestQueue
+ */
+const createHashtagSearch = (requestQueue) => {
+    /**
+     * @param {string} hashtag
+     */
+    return async (hashtag) => {
+        const url = new URL(`${hashtag}`.replace(/#/g, ''), 'https://www.instagram.com/explore/tags/');
+
+        return requestQueue.addRequest({
+            url: url.toString(),
+            userData: {
+                pageType: PAGE_TYPES.HASHTAG,
+            },
+        });
+    };
+};
+
 module.exports = {
     searchUrls,
+    createLocationSearch,
+    createHashtagSearch,
 };

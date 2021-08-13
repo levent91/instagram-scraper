@@ -236,6 +236,7 @@ const scrapePosts = async ({ page, itemSpec, requestQueue, entryData, fromRespon
             log(itemSpec, `${timeline.posts.length} posts loaded, ${Object.keys(scrollingState[itemSpec.id].ids).length}/${timeline.postsCount} posts scraped`);
             await extendOutputFunction(postsReadyToPush, {
                 label: 'post',
+                page,
             });
         } else {
             log(itemSpec, 'Waiting for initial data to load');
@@ -350,6 +351,7 @@ async function handlePostsGraphQLResponse({ page, response, scrollingState, exte
     log(itemSpec, `${timeline.posts.length} posts loaded, ${Object.keys(scrollingState[itemSpec.id].ids).length}/${timeline.postsCount} posts scraped`);
     await extendOutputFunction(postsReadyToPush, {
         label: 'post',
+        page,
     });
 }
 
@@ -375,8 +377,30 @@ function parsePostsForOutput(posts, itemSpec, currentScrollingPosition) {
     }));
 }
 
+/**
+ * Add a post
+ *
+ * @param {Apify.RequestQueue} requestQueue
+ */
+const createAddPost = (requestQueue) => {
+    /**
+     * @param {string} code
+     */
+    return async (code) => {
+        const url = new URL(code, 'https://www.instagram.com/p/');
+
+        return requestQueue.addRequest({
+            url: url.toString(),
+            userData: {
+                pageType: PAGE_TYPES.POST,
+            },
+        });
+    };
+};
+
 module.exports = {
     scrapePost,
     scrapePosts,
+    createAddPost,
     handlePostsGraphQLResponse,
 };
