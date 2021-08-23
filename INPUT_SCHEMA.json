@@ -67,9 +67,23 @@
             "default": 5
         },
         "scrapePostsUntilDate": {
-            "title": "Scrape posts until date",
+            "title": "Scrape until date",
             "type": "string",
             "description": "Scrapes post from the current date until it reaches a post older than a provided date. The date should be in format YYYY-MM-DD. By default scrapes all posts.",
+            "editor": "hidden"
+        },
+        "untilDate": {
+            "title": "Scrape until date",
+            "type": "string",
+            "description": "Scrapes posts and comments from the current date until it reaches a post older than a provided date. The date should be in format YYYY-MM-DD. By default scrapes all posts.",
+            "pattern": "^(today|yesterday|\\d+\\s?(minute|second|day|hour|month|year|week)s?|\\d{4}\\-\\d{2}\\-\\d{2}(\\s\\d{2}\\:\\d{2}\\:\\d{2})?)$",
+            "editor": "textfield"
+        },
+        "fromDate": {
+            "title": "Scrape from date",
+            "type": "string",
+            "description": "Scrapes post and comments from the current date until it reaches a post older than a provided date. The date should be in format YYYY-MM-DD or relative time . By default scrapes all posts.",
+            "pattern": "^(today|yesterday|\\d+\\s?(minute|second|day|hour|month|year|week)s?|\\d{4}\\-\\d{2}\\-\\d{2}(\\s\\d{2}\\:\\d{2}\\:\\d{2})?)$",
             "editor": "textfield"
         },
         "scrollWaitSecs": {
@@ -176,6 +190,7 @@
             "type": "boolean",
             "description": "If this feature is used, then for each post the solution will attempt to query additional details about it's owner. This will drastically slow down the crawling speed and increase the chance of an account ban if credentials are provided.",
             "editor": "checkbox",
+            "default": false,
             "sectionCaption": "Experimental features",
             "sectionDescription": "Features in this section are highly experimental, can result in a ban of the account if logged in and might cause the solution to fail."
         },

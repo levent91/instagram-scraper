@@ -14,7 +14,7 @@ const formatHashtagResult = (item) => `https://www.instagram.com/explore/tags/${
  * @param {any} input Input loaded from Apify.getInput();
  * @param {(params: { url: string }) => Promise<any>} request
  */
-const searchUrls = async (input, request, retries = 0) => {
+const searchUrls = async (input, request) => {
     const { search, searchType, searchLimit = 10 } = input;
     if (!search) return [];
 
@@ -27,48 +27,59 @@ const searchUrls = async (input, request, retries = 0) => {
         log.exception(error.message, 'Run failed because the provided input is incorrect:');
         log.info(' ');
         log.info('--  --  --  --  --');
-        process.exit(1);
-    }
-
-    log.info(`Searching for "${search}"`);
-
-    const searchUrl = `https://www.instagram.com/web/search/topsearch/?context=${searchType}&query=${encodeURIComponent(search)}`;
-    const { body } = await (async () => {
-        try {
-            return await request({
-                url: searchUrl,
-            });
-        } catch (e) {
-            log.debug('Search', { searchUrl, message: e.message });
-
-            return {
-                body: null,
-            };
-        }
-    })();
-
-    log.debug('Response', { body });
-
-    if (!body) {
-        if (retries < 10) {
-            log.warning(`Server returned non-json answer, retrying ${10 - retries - 1} times`);
-            await sleep(500 * (retries + 1));
-            return searchUrls(input, request, retries + 1);
-        }
-
-        throw new Error('Search is blocked on current proxy IP');
+        throw new Error('Run aborted');
     }
 
     /** @type {string[]} */
-    let urls = [];
-    if (searchType === SEARCH_TYPES.USER) urls = body.users.map(formatUserResult);
-    else if (searchType === SEARCH_TYPES.PLACE) urls = body.places.map(formatPlaceResult);
-    else if (searchType === SEARCH_TYPES.HASHTAG) urls = body.hashtags.map(formatHashtagResult);
+    const totalUrls = [];
 
-    log.info(`Found ${urls.length} search results. Limiting to ${searchLimit}.`);
-    urls = urls.slice(0, searchLimit);
+    const searchTerms = new Set(search.split(',').map((s) => s.trim()).filter(Boolean));
 
-    return urls;
+    for (const searchTerm of searchTerms) {
+        log.info(`Searching for "${searchTerm}"`);
+
+        const searchUrl = `https://www.instagram.com/web/search/topsearch/?context=${searchType}&query=${encodeURIComponent(searchTerm)}`;
+        const { body } = await (async () => {
+            const doSearch = async (retries = 0) => {
+                try {
+                    return await request({
+                        url: searchUrl,
+                    });
+                } catch (e) {
+                    log.debug('Search', { searchUrl, message: e.message });
+
+                    if (retries < 10) {
+                        log.warning(`Server returned non-json answer, retrying ${10 - retries - 1} times`);
+                        await sleep(500 * (retries + 1));
+                        return doSearch(retries + 1);
+                    }
+
+                    return {
+                        body: null,
+                    };
+                }
+            };
+
+            return doSearch();
+        })();
+
+        log.debug('Response', { body });
+
+        if (!body) {
+            throw new Error('Search is blocked on current proxy IP');
+        }
+
+        /** @type {string[]} */
+        let urls = [];
+        if (searchType === SEARCH_TYPES.USER) urls = body.users.map(formatUserResult);
+        else if (searchType === SEARCH_TYPES.PLACE) urls = body.places.map(formatPlaceResult);
+        else if (searchType === SEARCH_TYPES.HASHTAG) urls = body.hashtags.map(formatHashtagResult);
+
+        log.info(`Found ${urls.length} search results for "${searchTerm}". Limiting to ${searchLimit}.`);
+        totalUrls.push(...urls.slice(0, searchLimit));
+    }
+
+    return totalUrls;
 };
 
 /**

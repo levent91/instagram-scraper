@@ -116,7 +116,7 @@ const scrapePost = (request, itemSpec, entryData, additionalData) => {
         likesCount: item.edge_media_preview_like.count,
         imageUrl: item.display_url,
         firstComment: item.edge_media_to_caption.edges[0] && item.edge_media_to_caption.edges[0].node.text,
-        timestamp: new Date(parseInt(item.taken_at_timestamp, 10) * 1000),
+        timestamp: new Date(parseInt(item.taken_at_timestamp, 10) * 1000).toISOString(),
         locationName: (item.location && item.location.name) || null,
         ownerUsername: (item.owner && item.owner.username) || null,
     };
@@ -272,7 +272,7 @@ const scrapePosts = async ({ page, itemSpec, requestQueue, entryData, fromRespon
                     window.scrollTo({ top: document.body.scrollHeight });
                 });
 
-                await sleep(itemSpec.scrollWaitSecs || 3000);
+                await sleep(itemSpec.scrollWaitMillis || 3000);
 
                 await page.evaluate(() => {
                     window.scrollTo({ top: document.body.scrollHeight * 0.70 });

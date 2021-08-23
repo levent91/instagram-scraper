@@ -70,7 +70,7 @@ const formatSinglePost = (node) => {
         alt: node.accessibility_caption,
         likesCount: likes ? likes.count : null,
         videoViewCount: node.video_view_count,
-        timestamp: node.taken_at_timestamp ? new Date(parseInt(node.taken_at_timestamp, 10) * 1000) : null,
+        timestamp: node.taken_at_timestamp ? new Date(parseInt(node.taken_at_timestamp, 10) * 1000).toISOString() : null,
         locationName: node.location ? node.location.name : null,
         locationId: node.location ? node.location.id : null,
         ownerFullName: node.owner ? node.owner.full_name : null,

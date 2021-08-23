@@ -3,6 +3,12 @@
 Features:
 - Update to SDK 2
 - Better UX
+- Output profiles from search
+- Minimum and maximum dates
+- Multiple search terms separated by commas
+
+Changes:
+- Deprecated `scrapePostsUntilDate`, use `untilDate` instead
 
 Bug fixes:
 - Stories

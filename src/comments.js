@@ -154,7 +154,7 @@ function parseCommentsForOutput(comments, itemSpec, currentScrollingPosition) {
         postId: itemSpec.id,
         text: item.node.text,
         position: index + currentScrollingPosition + 1,
-        timestamp: new Date(parseInt(item.node.created_at, 10) * 1000),
+        timestamp: new Date(parseInt(item.node.created_at, 10) * 1000).toISOString(),
         ownerId: item.node.owner ? item.node.owner.id : null,
         ownerIsVerified: item.node.owner ? item.node.owner.is_verified : null,
         ownerUsername: item.node.owner ? item.node.owner.username : null,

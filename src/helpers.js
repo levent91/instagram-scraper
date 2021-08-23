@@ -1,5 +1,6 @@
 const Apify = require('apify');
 const vm = require('vm');
+const moment = require('moment');
 const Puppeteer = require('puppeteer'); // eslint-disable-line no-unused-vars
 const { get } = require('lodash');
 const errors = require('./errors');
@@ -154,6 +155,12 @@ const getItemSpec = (entryData, additionalData) => {
         };
     }
 
+    if (entryData.Challenge) {
+        return {
+            pageType: PAGE_TYPES.CHALLENGE,
+        };
+    }
+
     Apify.utils.log.info('unsupported page', entryData);
 
     throw errors.unsupportedPage();
@@ -237,10 +244,9 @@ async function query(
                         'accept-language': `${window.navigator.language};q=0.9`,
                         'x-asbd-id': ASBD,
                         'x-ig-app-id': APP_ID,
+                        'x-ig-www-claim': sessionStorage.getItem('www-claim-v2') || 0,
                         ...(url.includes('/v1') ? {} : {
-                            'x-ig-www-claim': sessionStorage.getItem('www-claim-v2') || 0,
-                            'x-csrftoken':
-                                window._sharedData?.config?.csrf_token
+                            'x-csrftoken': window._sharedData?.config?.csrf_token
                                 ?? window.__initialData?.data?.config.csrf_token,
                             'x-requested-with': 'XMLHttpRequest',
                         }),
@@ -273,8 +279,7 @@ async function query(
 
             if (error.message.includes(429)) {
                 log(itemSpec, `${logPrefix} - Encountered rate limit error, waiting ${(retries + 1) * 10} seconds.`, LOG_TYPES.WARNING);
-                await sleep((retries + 1) * 10000);
-                retries++;
+                await sleep((retries++ + 1) * 10000);
             } else {
                 throw error;
             }
@@ -366,21 +371,6 @@ function parseCaption(caption) {
     return { hashtags, mentions };
 }
 
-function hasReachedLastPostDate(scrapePostsUntilDate, lastPostDate, itemSpec) {
-    const lastPostDateAsDate = new Date(lastPostDate);
-    if (scrapePostsUntilDate) {
-        // We want to continue scraping (return true) if the scrapePostsUntilDate is older (smaller) than the date of the last post
-        // Don't forget we scrape from the most recent ones to the past
-        const scrapePostsUntilDateAsDate = new Date(scrapePostsUntilDate);
-        const willContinue = scrapePostsUntilDateAsDate < lastPostDateAsDate;
-        if (!willContinue) {
-            log(itemSpec, `Reached post with older date than our limit: ${lastPostDateAsDate}. Finishing scrolling...`, LOG_TYPES.WARNING);
-            return true;
-        }
-    }
-    return false;
-}
-
 /**
  * @param {{
  *   items: any[],
@@ -398,17 +388,17 @@ async function filterPushedItemsAndUpdateState({ items, itemSpec, parsingFn, scr
             ids: {},
         };
     }
-    const { limit, scrapePostsUntilDate } = itemSpec;
+    const { limit, minMaxDate } = itemSpec;
     const currentScrollingPosition = Object.keys(scrollingState[itemSpec.id].ids).length;
     const parsedItems = parsingFn(items, itemSpec, currentScrollingPosition);
     let itemsToPush = [];
+    const hasOutOfTimeRange = parsedItems.some(({ timestamp }) => {
+        return (minMaxDate.minDate?.isAfter(timestamp) === true) || (minMaxDate.maxDate?.isBefore(timestamp) === true);
+    });
+
     for (const item of parsedItems) {
         if (Object.keys(scrollingState[itemSpec.id].ids).length >= limit) {
             log(itemSpec, `Reached user provided limit of ${limit} results, stopping...`);
-            break;
-        }
-        if (scrapePostsUntilDate && hasReachedLastPostDate(scrapePostsUntilDate, item.timestamp, itemSpec)) {
-            scrollingState[itemSpec.id].reachedLastPostDate = true;
             break;
         }
         if (!scrollingState[itemSpec.id].ids[item.id]) {
@@ -418,6 +408,12 @@ async function filterPushedItemsAndUpdateState({ items, itemSpec, parsingFn, scr
             // Apify.utils.log.debug(`Item: ${item.id} was already pushed, skipping...`);
         }
     }
+
+    if (hasOutOfTimeRange) {
+        log(itemSpec, 'Max date has been reached');
+        scrollingState[itemSpec.id].reachedLastPostDate = true;
+    }
+
     // We have to tell the state if we are going though duplicates so it knows it should still continue scrolling
     if (itemsToPush.length === 0) {
         scrollingState[itemSpec.id].allDuplicates = true;
@@ -446,7 +442,7 @@ async function filterPushedItemsAndUpdateState({ items, itemSpec, parsingFn, scr
 }
 
 const shouldContinueScrolling = ({ scrollingState, itemSpec, oldItemCount, type }) => {
-    if (type === 'posts') {
+    if (type === 'posts' || type === 'comments') {
         if (scrollingState[itemSpec.id].reachedLastPostDate) {
             return false;
         }
@@ -538,12 +534,15 @@ const loadMore = async ({ itemSpec, page, retry = 0, type }) => {
         }
     }
 
-    // posts scroll down
+    /**
+     * posts scroll down
+     * @type {Array<null|void|Puppeteer.HTTPRequest>}
+     */
     let scrolled = [];
     if (type === 'posts') {
         for (let i = 0; i < 10; i++) {
             scrolled = await Promise.all([
-                page.evaluate(() => window.scrollBy(0, 9999999)),
+                page.evaluate(() => window.scrollBy(0, document.body.scrollHeight)),
                 page.waitForRequest(
                     (request) => {
                         const requestUrl = request.url();
@@ -580,6 +579,9 @@ const loadMore = async ({ itemSpec, page, retry = 0, type }) => {
             const status = response.status();
 
             if (status === 429) {
+                const { scrollWaitMillis } = itemSpec;
+                await sleep(scrollWaitMillis);
+
                 return { rateLimited: true };
             }
 
@@ -674,13 +676,13 @@ const finiteScroll = async (context) => {
     // There is a rate limit in scrolling, we don;t know exactly how much
     // If you reach it, it will block you completely so it is necessary to wait more in scrolls
     // Seems the biggest block chance is when you are over 2000 items
-    const { scrollWaitSecs } = itemSpec;
+    const { scrollWaitMillis } = itemSpec;
     if (oldItemCount > 1000) {
         const modulo = oldItemCount % 100;
         if (modulo >= 0 && modulo < 12) { // Every 100 posts: Wait random for user passed time with some randomization
-            const waitSecs = Math.round(scrollWaitSecs * (Math.random() + 1));
-            log(itemSpec, `Sleeping for ${waitSecs} seconds to prevent getting rate limit error..`);
-            await sleep(waitSecs * 1000);
+            const waitMillis = Math.round(scrollWaitMillis + ((Math.random() * 10000) + 1000));
+            log(itemSpec, `Sleeping for ${waitMillis / 1000} seconds to prevent getting rate limit error..`);
+            await sleep(waitMillis);
         }
     }
 
@@ -885,6 +887,11 @@ const patchInput = (input) => {
             Apify.utils.log.warning(`\n-------\nYour "extendOutputFunction" parameter is wrong, so it's being defaulted to a working one. Please change it to conform to the proper format or leave it empty\n-------\n`);
             input.extendOutputFunction = 'async ({ item }) => { return item; }';
         }
+
+        if (typeof input.scrapePostsUntilDate === 'string' && input.scrapePostsUntilDate) {
+            Apify.utils.log.warning(`\n-------\nYou are using "scrapePostsUntilDate" and it's deprecated. Prefer using "untilDate" as it works for both posts and comments`);
+            input.untilDate = input.scrapePostsUntilDate;
+        }
     }
 };
 
@@ -902,6 +909,74 @@ const patchLog = (crawler) => {
     };
 };
 
+/**
+ * @param {*} value
+ * @returns
+ */
+const parseTimeUnit = (value) => {
+    if (!value) {
+        return null;
+    }
+
+    if (value === 'today' || value === 'yesterday') {
+        return (value === 'today' ? moment() : moment().subtract(1, 'day')).startOf('day');
+    }
+
+    const [, number, unit] = `${value}`.match(/^(\d+)\s?(minute|second|day|hour|month|year|week)s?$/i) || [];
+
+    if (+number && unit) {
+        return moment().subtract(+number, unit);
+    }
+
+    return moment(value);
+};
+
+/**
+ * @typedef MinMax
+ * @property {number | string} [min]
+ * @property {number | string} [max]
+ */
+
+/**
+ * @typedef {ReturnType<typeof minMaxDates>} MinMaxDates
+ */
+
+/**
+ * Generate a function that can check date intervals depending on the input
+ * @param {MinMax} param
+ */
+const minMaxDates = ({ min, max }) => {
+    const minDate = parseTimeUnit(min);
+    const maxDate = parseTimeUnit(max);
+
+    if (minDate && maxDate && maxDate.diff(minDate) < 0) {
+        throw new Error(`Minimum date ${minDate.toISOString()} needs to be less than max date ${maxDate.toISOString()}`);
+    }
+
+    return {
+        /**
+         * cloned min date, if set
+         */
+        get minDate() {
+            return minDate?.clone();
+        },
+        /**
+         * cloned max date, if set
+         */
+        get maxDate() {
+            return maxDate?.clone();
+        },
+        /**
+         * compare the given date/timestamp to the time interval
+         * @param {string | number} time
+         */
+        compare(time) {
+            const base = moment(time);
+            return (minDate ? minDate.diff(base) <= 0 : true) && (maxDate ? maxDate.diff(base) >= 0 : true);
+        },
+    };
+};
+
 module.exports = {
     getPageTypeFromUrl,
     getItemSpec,
@@ -913,6 +988,7 @@ module.exports = {
     singleQuery,
     parseCaption,
     extendFunction,
+    minMaxDates,
     filterPushedItemsAndUpdateState,
     finiteScroll,
     shouldContinueScrolling,

@@ -9,7 +9,7 @@ const { scrapeDetails, createAddProfile } = require('./details');
 const { searchUrls, createHashtagSearch, createLocationSearch } = require('./search');
 const helpers = require('./helpers');
 
-const { getItemSpec, getPageTypeFromUrl, extendFunction } = helpers;
+const { getItemSpec, getPageTypeFromUrl, extendFunction, minMax } = helpers;
 const { GRAPHQL_ENDPOINT, ABORT_RESOURCE_TYPES, ABORT_RESOURCE_URL_INCLUDES, SCRAPE_TYPES,
     ABORT_RESOURCE_URL_DOWNLOAD_JS, PAGE_TYPES, V1_ENDPOINT } = require('./consts');
 const errors = require('./errors');
@@ -22,19 +22,16 @@ Apify.main(async () => {
     const input = await Apify.getInput();
     const {
         proxy,
-        resultsType,
+        resultsType = 'posts',
         resultsLimit = 200,
-        scrapePostsUntilDate,
         scrollWaitSecs = 15,
         pageTimeout = 60,
-        maxRequestRetries,
+        maxRequestRetries = 5,
         loginCookies,
         directUrls = [],
         loginUsername,
         maxErrorCount = 15,
         loginPassword,
-        useStealth = false,
-        useChrome,
         debugLog = false,
         includeHasStories = false,
         cookiesPerConcurrency = 1,
@@ -68,7 +65,7 @@ Apify.main(async () => {
 
     const proxyConfiguration = await helpers.proxyConfiguration({
         proxyConfig: proxy,
-        hint: ['RESIDENTIAL'],
+        hint: !logins.loginCount() ? ['RESIDENTIAL'] : [],
     });
 
     try {
@@ -85,19 +82,21 @@ Apify.main(async () => {
         Apify.utils.log.error(error.message);
         Apify.utils.log.info(' ');
         Apify.utils.log.info('--  --  --  --  --');
-        process.exit(1);
+        throw new Error('Run aborted');
     }
 
     if (Apify.isAtHome()) {
         if (!logins.loginCount() && proxyConfiguration?.usesApifyProxy && proxyConfiguration?.groups?.includes('RESIDENTIAL') === false) {
-            Apify.utils.log.warning(`--------
+            Apify.utils.log.warning(`
+--------
         You are using Apify proxy but not the RESIDENTIAL group! It is very likely it will not work properly.
         Please contact support@apify.com for access to residential proxy.
 --------`);
         }
 
         if (logins.loginCount() && proxyConfiguration?.groups?.includes('RESIDENTIAL') === true) {
-            Apify.utils.log.warning(`--------
+            Apify.utils.log.warning(`
+--------
         RESIDENTIAL proxy group when using login cookies is not advised as the location of the IP will keep changing.
         If the login cookies are getting logged out, try changing to a datacenter proxy.
 --------`);
@@ -108,7 +107,8 @@ Apify.main(async () => {
         proxyConfiguration,
     });
 
-    let urls;
+    /** @type {string[]} */
+    let urls = [];
     if (resultsType === SCRAPE_TYPES.COOKIES) {
         if (loginUsername && loginPassword) {
             log.info('Will extract login information from username/password');
@@ -139,6 +139,10 @@ Apify.main(async () => {
         throw new Error('No URLs to process');
     }
 
+    if (!logins.loginCount() && resultsType === SCRAPE_TYPES.STORIES) {
+        throw new Error('Scraping stories require login information');
+    }
+
     const requestQueue = await Apify.openRequestQueue();
     const requestList = await Apify.openRequestList('request-list', requestListSources);
 
@@ -149,7 +153,29 @@ Apify.main(async () => {
 
     helpers.patchInput(input);
 
+    const minMaxDate = helpers.minMaxDates({
+        max: input.fromDate,
+        min: input.untilDate,
+    });
+
+    if (minMaxDate?.maxDate) {
+        log.info(`Getting content older than ${minMaxDate.maxDate.toISOString()}`);
+    }
+
+    if (minMaxDate?.minDate) {
+        log.info(`Getting content until ${minMaxDate.minDate.toISOString()}`);
+    }
+
     const extendOutputFunction = await extendFunction({
+        filter: async ({ item }) => {
+            // compare timestamp on posts or comments
+            const attachedDate = item?.timestamp
+                ?? item?.taken_at_timestamp;
+
+            return attachedDate
+                ? minMaxDate.compare(attachedDate)
+                : true;
+        },
         output: async (data) => {
             await Apify.pushData(data);
         },
@@ -212,7 +238,13 @@ Apify.main(async () => {
             await page.setBypassCSP(true);
 
             if (loginUsername && loginPassword && resultsType === SCRAPE_TYPES.COOKIES) {
-                await login(loginUsername, loginPassword, page);
+                try {
+                    await login(loginUsername, loginPassword, page);
+                } catch (e) {
+                    await crawler.autoscaledPool?.abort();
+                    throw e;
+                }
+
                 await Apify.setValue('OUTPUT', await page.cookies());
 
                 Apify.utils.log.info('\n-----------\n\nCookies saved, check OUTPUT in the key value store\n\n-----------\n');
@@ -411,8 +443,10 @@ Apify.main(async () => {
         }],
         maxRequestRetries,
         launchContext: {
-            stealth: useStealth,
-            useChrome: typeof useChrome === 'boolean' ? useChrome : Apify.isAtHome(),
+            launchOptions: {
+                headless: false,
+            },
+            useChrome: Apify.isAtHome(),
         },
         browserPoolOptions: {
             maxOpenPagesPerBrowser: 1,
@@ -455,7 +489,6 @@ Apify.main(async () => {
         handlePageTimeoutSecs: 300 * 60, // Ex: 5 hours to crawl thousands of comments
         handlePageFunction: async ({ page, request, response, session }) => {
             if (checkProxyIp) {
-                await page.setBypassCSP(true);
                 const { clientIp } = await page.evaluate(async () => {
                     return fetch('https://api.apify.com/v2/browser-info').then((res) => res.json());
                 });
@@ -507,7 +540,7 @@ Apify.main(async () => {
 
             await page.waitForFunction(() => {
                 // eslint-disable-next-line no-underscore-dangle
-                return (!(window?.__initialData?.pending)
+                return (window?.__initialData?.pending === false
                     && window?.__initialData?.data);
             }, { timeout: 20000 });
 
@@ -541,12 +574,21 @@ Apify.main(async () => {
             }
 
             const itemSpec = getItemSpec(entryData, additionalData);
+
+            if (itemSpec.pageType === PAGE_TYPES.CHALLENGE) {
+                if (logins.hasSession(session)) {
+                    logins.increaseError(session);
+                } else {
+                    session.retire();
+                }
+                throw errors.challengePage();
+            }
+
             // Passing the limit around
             itemSpec.limit = resultsLimit || 999999;
-            itemSpec.scrapePostsUntilDate = scrapePostsUntilDate;
+            itemSpec.minMaxDate = minMaxDate;
             itemSpec.input = input;
-            itemSpec.scrollWaitSecs = scrollWaitSecs;
-
+            itemSpec.scrollWaitMillis = scrollWaitSecs * 1000;
 
             if (request.userData.label === 'postDetail') {
                 const result = scrapePost(request, itemSpec, entryData, additionalData);

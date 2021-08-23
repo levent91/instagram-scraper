@@ -14,6 +14,7 @@ module.exports = {
         HASHTAG: 'hashtag',
         POST: 'post',
         STORY: 'story',
+        CHALLENGE: 'challenge',
     },
     // Types of scrapes this actor can do
     SCRAPE_TYPES: {
@@ -56,6 +57,8 @@ module.exports = {
         '/logging_client_events',
         '/falco',
         '/bz',
+        '/fxcal',
+        'oauth/status',
     ],
     // These are needed for scrolling to work
     // TODO: Retest this

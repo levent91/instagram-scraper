@@ -5,7 +5,7 @@ const { acceptCookiesDialog } = require('./helpers');
 const { pleaseOpen, liveView, localhost } = require('./asci-texts');
 const { authorize, close } = require('./submit-page');
 
-const { sleep, puppeteer } = Apify.utils;
+const { sleep, puppeteer, log } = Apify.utils;
 
 /**
  * Attempts log user into instagram with provided username and password
@@ -116,7 +116,7 @@ const login = async (username, password, page) => {
             saveHtml: true,
         });
 
-        process.exit(1);
+        throw new Error('Run aborted');
     }
 };
 
@@ -143,13 +143,15 @@ const loginManager = ({ loginCookies, maxErrorCount }) => {
                     cookies,
                 });
             });
-        } else {
+        } else if (Array.isArray(loginCookies) && loginCookies?.length > 0) {
             logins.set(0, {
                 index: 0,
                 uses: 0,
                 errors: 0,
                 cookies: loginCookies,
             });
+        } else {
+            log.warning('No usable loginCookies from input');
         }
     }
 

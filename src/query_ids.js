@@ -9,6 +9,7 @@ const QUERY_IDS = {
     profileChannelQueryId: 'bc78b344a68ed16dd5d7f264681c4c76',
     profileTaggedQueryId: 'ff260833edf142911047af6024eb634a',
     postQueryId: 'fead941d698dc1160a298ba7bec277ac',
+    postShortCodeMedia: '2efa04f61586458cef44441f474eee7c',
     profileHighlights: '45246d3fe16ccc6577e0bd297a5db1ab',
     profilePublicStories: 'd4d88dc1500312af6f937f7b804c68c3',
     profileStories: 'c9c56db64beb4c9dea2d17740d0259d9',
