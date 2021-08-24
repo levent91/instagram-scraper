@@ -3,11 +3,12 @@ const vm = require('vm');
 const moment = require('moment');
 const Puppeteer = require('puppeteer'); // eslint-disable-line no-unused-vars
 const { get } = require('lodash');
+const { gotScraping } = require('got-scraping');
 const errors = require('./errors');
 const { expandOwnerDetails } = require('./user-details');
 const { PAGE_TYPES, GRAPHQL_ENDPOINT, LOG_TYPES, PAGE_TYPE_URL_REGEXES } = require('./consts');
 
-const { sleep, requestAsBrowser } = Apify.utils;
+const { sleep } = Apify.utils;
 
 /**
  * @param {{
@@ -44,17 +45,20 @@ const createGotRequester = ({ proxyConfiguration }) => {
         url,
         session,
         proxyUrl = proxyConfiguration?.newUrl(session?.id ?? `sess${Math.round(Math.random() * 10000)}`),
-        headers,
+        headers = {},
         method = 'GET',
     }) => {
-        return requestAsBrowser({
+        return gotScraping({
             url,
-            json: true,
             method,
-            abortFunction: () => false,
             proxyUrl,
-            headers,
-            ignoreSslErrors: true,
+            headers: {
+                ...headers,
+            },
+            responseType: 'json',
+            https: {
+                rejectUnauthorized: false,
+            },
         });
     };
 };
@@ -392,7 +396,8 @@ async function filterPushedItemsAndUpdateState({ items, itemSpec, parsingFn, scr
     const currentScrollingPosition = Object.keys(scrollingState[itemSpec.id].ids).length;
     const parsedItems = parsingFn(items, itemSpec, currentScrollingPosition);
     let itemsToPush = [];
-    const hasOutOfTimeRange = parsedItems.some(({ timestamp }) => {
+
+    const isAllOutOfTimeRange = parsedItems.every(({ timestamp }) => {
         return (minMaxDate.minDate?.isAfter(timestamp) === true) || (minMaxDate.maxDate?.isBefore(timestamp) === true);
     });
 
@@ -409,7 +414,7 @@ async function filterPushedItemsAndUpdateState({ items, itemSpec, parsingFn, scr
         }
     }
 
-    if (hasOutOfTimeRange) {
+    if (isAllOutOfTimeRange) {
         log(itemSpec, 'Max date has been reached');
         scrollingState[itemSpec.id].reachedLastPostDate = true;
     }
@@ -420,6 +425,7 @@ async function filterPushedItemsAndUpdateState({ items, itemSpec, parsingFn, scr
     } else {
         scrollingState[itemSpec.id].allDuplicates = false;
     }
+
     if (type === 'posts') {
         if (itemSpec.input.expandOwners && itemSpec.pageType !== PAGE_TYPES.PROFILE) {
             itemsToPush = await expandOwnerDetails(itemsToPush, page, itemSpec);
@@ -438,6 +444,7 @@ async function filterPushedItemsAndUpdateState({ items, itemSpec, parsingFn, scr
         }
         */
     }
+
     return itemsToPush;
 }
 
@@ -623,7 +630,7 @@ const loadMore = async ({ itemSpec, page, retry = 0, type }) => {
     if (!data && retry < 4 && (scrolled[1] || retry < 5)) {
         // We scroll the other direction than usual
         if (type === 'posts') {
-            await page.evaluate(() => window.scrollBy(0, -1000));
+            await page.evaluate(() => window.scrollTo({ top: document.body.scrollHeight * 0.70 }));
         }
         log(itemSpec, `Retry scroll after ${retryDelay / 3600} seconds`);
         await sleep(retryDelay);
@@ -881,11 +888,11 @@ const proxyConfiguration = async ({
  */
 const patchInput = (input) => {
     if (input) {
-        if (typeof input.extendOutputFunction === 'string' && input.extendOutputFunction.startsWith('($)')) {
+        if (typeof input.extendOutputFunction === 'string' && !input.extendOutputFunction.startsWith('async')) {
             // old extend output function, rewrite it to use the new format that will be
             // picked by the extendFunction helper
             Apify.utils.log.warning(`\n-------\nYour "extendOutputFunction" parameter is wrong, so it's being defaulted to a working one. Please change it to conform to the proper format or leave it empty\n-------\n`);
-            input.extendOutputFunction = 'async ({ item }) => { return item; }';
+            input.extendOutputFunction = '';
         }
 
         if (typeof input.scrapePostsUntilDate === 'string' && input.scrapePostsUntilDate) {
