@@ -72,17 +72,17 @@
             "description": "Scrapes post from the current date until it reaches a post older than a provided date. The date should be in format YYYY-MM-DD. By default scrapes all posts.",
             "editor": "hidden"
         },
-        "untilDate": {
-            "title": "Scrape until date",
-            "type": "string",
-            "description": "Scrapes posts and comments from the current date until it reaches a post older than a provided date. The date should be in format YYYY-MM-DD. By default scrapes all posts.",
-            "pattern": "^(today|yesterday|\\d+\\s?(minute|second|day|hour|month|year|week)s?|\\d{4}\\-\\d{2}\\-\\d{2}(\\s\\d{2}\\:\\d{2}\\:\\d{2})?)$",
-            "editor": "textfield"
-        },
         "fromDate": {
             "title": "Scrape from date",
             "type": "string",
             "description": "Scrapes post and comments from the current date until it reaches a post older than a provided date. The date should be in format YYYY-MM-DD or relative time . By default scrapes all posts.",
+            "pattern": "^(today|yesterday|\\d+\\s?(minute|second|day|hour|month|year|week)s?|\\d{4}\\-\\d{2}\\-\\d{2}(\\s\\d{2}\\:\\d{2}\\:\\d{2})?)$",
+            "editor": "textfield"
+        },
+        "untilDate": {
+            "title": "Scrape until date",
+            "type": "string",
+            "description": "Scrapes posts and comments from the current date until it reaches a post older than a provided date. The date should be in format YYYY-MM-DD. By default scrapes all posts.",
             "pattern": "^(today|yesterday|\\d+\\s?(minute|second|day|hour|month|year|week)s?|\\d{4}\\-\\d{2}\\-\\d{2}(\\s\\d{2}\\:\\d{2}\\:\\d{2})?)$",
             "editor": "textfield"
         },

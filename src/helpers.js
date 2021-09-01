@@ -909,7 +909,7 @@ const patchInput = (input) => {
             input.extendOutputFunction = '';
         }
 
-        if (typeof input.scrapePostsUntilDate === 'string' && input.scrapePostsUntilDate) {
+        if (!input.untilDate && typeof input.scrapePostsUntilDate === 'string' && input.scrapePostsUntilDate) {
             Apify.utils.log.warning(`\n-------\nYou are using "scrapePostsUntilDate" and it's deprecated. Prefer using "untilDate" as it works for both posts and comments`);
             input.untilDate = input.scrapePostsUntilDate;
         }

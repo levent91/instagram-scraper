@@ -162,11 +162,11 @@ Apify.main(async () => {
     });
 
     if (minMaxDate?.maxDate) {
-        log.info(`Getting content until ${minMaxDate.maxDate.toISOString()}`);
+        log.info(`Getting content older than ${minMaxDate.maxDate.toISOString()}`);
     }
 
     if (minMaxDate?.minDate) {
-        log.info(`Getting content older than ${minMaxDate.minDate.toISOString()}`);
+        log.info(`Getting content until ${minMaxDate.minDate.toISOString()}`);
     }
 
     const extendOutputFunction = await extendFunction({
