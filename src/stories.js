@@ -30,7 +30,7 @@ const getStoriesFromGraphQL = (data) => {
  * @returns {Promise<void>}
  */
 const scrapeStories = async ({ request, page, data, extendOutputFunction }) => {
-    const { itemSpec } = page;
+    const { itemSpec, limit } = page;
     const reelId = data?.entry_data?.ProfilePage?.[0]?.graphql?.user?.id
         ?? data?.entry_data?.StoriesPage?.[0]?.user?.id;
 
@@ -66,7 +66,7 @@ const scrapeStories = async ({ request, page, data, extendOutputFunction }) => {
 
         Apify.utils.log.info(`Scraped ${stories.length}/${timeline.storiesCount} stories from ${request.url}`);
 
-        await extendOutputFunction(stories, {
+        await extendOutputFunction(stories.slice(0, limit), {
             label: 'stories',
             page,
         });

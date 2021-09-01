@@ -165,6 +165,18 @@ const getItemSpec = (entryData, additionalData) => {
         };
     }
 
+    if (entryData.HttpGatedContentPage) {
+        return {
+            pageType: PAGE_TYPES.AGE,
+        };
+    }
+
+    if (entryData.HttpErrorPage) {
+        return {
+            pageType: PAGE_TYPES.DONTEXIST,
+        };
+    }
+
     Apify.utils.log.info('unsupported page', entryData);
 
     throw errors.unsupportedPage();
@@ -393,8 +405,8 @@ async function filterPushedItemsAndUpdateState({ items, itemSpec, parsingFn, scr
         };
     }
     const { limit, minMaxDate } = itemSpec;
-    const currentScrollingPosition = Object.keys(scrollingState[itemSpec.id].ids).length;
-    const parsedItems = parsingFn(items, itemSpec, currentScrollingPosition);
+    const currentCount = () => Object.keys(scrollingState[itemSpec.id].ids).length;
+    const parsedItems = parsingFn(items, itemSpec, currentCount());
     let itemsToPush = [];
 
     const isAllOutOfTimeRange = parsedItems.every(({ timestamp }) => {
@@ -402,19 +414,21 @@ async function filterPushedItemsAndUpdateState({ items, itemSpec, parsingFn, scr
     });
 
     for (const item of parsedItems) {
-        if (Object.keys(scrollingState[itemSpec.id].ids).length >= limit) {
+        if (currentCount() >= limit) {
             log(itemSpec, `Reached user provided limit of ${limit} results, stopping...`);
             break;
         }
-        if (!scrollingState[itemSpec.id].ids[item.id]) {
-            itemsToPush.push(item);
-            scrollingState[itemSpec.id].ids[item.id] = true;
-        } else {
-            // Apify.utils.log.debug(`Item: ${item.id} was already pushed, skipping...`);
+        if (minMaxDate.compare(item.timestamp)) {
+            if (!scrollingState[itemSpec.id].ids[item.id]) {
+                itemsToPush.push(item);
+                scrollingState[itemSpec.id].ids[item.id] = true;
+            } else {
+                // Apify.utils.log.debug(`Item: ${item.id} was already pushed, skipping...`);
+            }
         }
     }
 
-    if (isAllOutOfTimeRange) {
+    if (isAllOutOfTimeRange && currentCount() > 0) {
         log(itemSpec, 'Max date has been reached');
         scrollingState[itemSpec.id].reachedLastPostDate = true;
     }

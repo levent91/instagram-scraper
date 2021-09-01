@@ -119,7 +119,7 @@
             "type": "integer",
             "description": "Set number of cookies that are used per one concurrent browser. (e.g. if set to 3 and set 6 sets of loginCookies, then it will run with concurrency 2 so each browser can choose randomly from three sets of cookies.)",
             "editor": "number",
-            "default": 0
+            "default": 1
         },
         "loginUsername": {
             "title": "Login Username",

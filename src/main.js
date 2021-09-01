@@ -159,11 +159,11 @@ Apify.main(async () => {
     });
 
     if (minMaxDate?.maxDate) {
-        log.info(`Getting content older than ${minMaxDate.maxDate.toISOString()}`);
+        log.info(`Getting content until ${minMaxDate.maxDate.toISOString()}`);
     }
 
     if (minMaxDate?.minDate) {
-        log.info(`Getting content until ${minMaxDate.minDate.toISOString()}`);
+        log.info(`Getting content older than ${minMaxDate.minDate.toISOString()}`);
     }
 
     const extendOutputFunction = await extendFunction({
@@ -529,9 +529,10 @@ Apify.main(async () => {
             }
 
             if (response.status() === 404) {
-                Apify.utils.log.error(`Page "${request.url}" does not exist.`);
-                return;
+                request.noRetry = true;
+                throw errors.doesntExist();
             }
+
             const error = await page.$('body.p-error');
             if (error) {
                 Apify.utils.log.error(`Page "${request.url}" is private and cannot be displayed.`);
@@ -584,6 +585,19 @@ Apify.main(async () => {
                 throw errors.challengePage();
             }
 
+            if (itemSpec.pageType === PAGE_TYPES.AGE || itemSpec.pageType === PAGE_TYPES.DONTEXIST) {
+                request.noRetry = true;
+
+                switch (itemSpec.pageType) {
+                    case PAGE_TYPES.AGE:
+                        throw errors.agePage();
+                    case PAGE_TYPES.DONTEXIST:
+                        throw errors.doesntExist();
+                    default:
+                        return;
+                }
+            }
+
             // Passing the limit around
             itemSpec.limit = resultsLimit || 999999;
             itemSpec.minMaxDate = minMaxDate;
@@ -595,9 +609,11 @@ Apify.main(async () => {
 
                 await extendOutputFunction(result, {
                     label: 'post',
+                    page,
                 });
             } else {
                 page.itemSpec = itemSpec;
+
                 try {
                     switch (resultsType) {
                         case SCRAPE_TYPES.POSTS:
@@ -665,7 +681,8 @@ Apify.main(async () => {
 
             await Apify.pushData({
                 '#debug': Apify.utils.createRequestDebugInfo(request),
-                '#error': request.url,
+                '#error': error.message,
+                '#url': request.url,
             });
         },
     });

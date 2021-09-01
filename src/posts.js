@@ -293,9 +293,6 @@ const scrapePosts = async ({ page, itemSpec, requestQueue, entryData, fromRespon
                     });
                 }
             }
-            // We have to forcefully close the browser here because it hangs sometimes for some listeners reasons
-            // Because we always have max one page per browser, this is fine
-            // console.log(`Puppeteer retire posts.js line 176`);
         }
     }
 };
