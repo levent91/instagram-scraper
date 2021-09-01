@@ -104,7 +104,10 @@ Apify.main(async () => {
     }
 
     const doRequest = helpers.createGotRequester({
-        proxyConfiguration,
+        proxyConfiguration: await Apify.createProxyConfiguration({
+            groups: ['RESIDENTIAL'],
+            countryCode: 'US',
+        }),
     });
 
     /** @type {string[]} */
