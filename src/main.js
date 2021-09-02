@@ -24,7 +24,7 @@ Apify.main(async () => {
         proxy,
         resultsType = 'posts',
         resultsLimit = 200,
-        scrollWaitSecs = 15,
+        scrollWaitSecs = 3,
         pageTimeout = 60,
         maxRequestRetries = 5,
         loginCookies,

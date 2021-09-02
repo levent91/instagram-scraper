@@ -90,7 +90,7 @@
             "title": "Scroll wait seconds",
             "type": "integer",
             "description": "How many seconds it will wait every 100 posts/comments when scrolling. If you scrape more than 1000 items, it is important to slow down to not get blocked. The seconds are randomized a bit. If you get blocked anyway, try to increase this number.",
-            "default": 5
+            "default": 3
         },
         "proxy": {
             "title": "Proxy configuration",
