@@ -7,6 +7,7 @@
         "apify": "^2.0.6",
         "lodash": "^4.17.21",
         "got-scraping": "^3.2.2",
+        "delayable-idle-abort-promise": "^1.0.0",
         "moment": "^2.29.1",
         "header-generator": "^1.1.1",
         "puppeteer": "*"

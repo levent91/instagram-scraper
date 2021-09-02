@@ -608,7 +608,7 @@ Apify.main(async () => {
             itemSpec.scrollWaitMillis = scrollWaitSecs * 1000;
 
             if (request.userData.label === 'postDetail') {
-                const result = scrapePost(request, itemSpec, entryData, additionalData);
+                const result = await scrapePost({ request, page, itemSpec, entryData, additionalData });
 
                 await extendOutputFunction(result, {
                     label: 'post',

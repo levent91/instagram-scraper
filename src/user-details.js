@@ -25,19 +25,26 @@ async function expandOwnerDetails(posts, page, itemSpec) {
     const transformedPosts = [];
     for (let i = 0; i < posts.length; i++) {
         log(itemSpec, `Owner details - Expanding owner details of post ${i + 1}/${posts.length}`);
-        if (!posts[i].ownerId) {
+
+        const ownerId = posts[i].ownerId
+            ?? posts[i]?.['#debug']?.postOwnerId;
+
+        if (!ownerId) {
             transformedPosts.push(posts[i]);
             // eslint-disable-next-line no-continue
             continue;
         }
+
         const newPost = { ...posts[i] };
-        if (users[posts[i].ownerId]) {
-            newPost.ownerUsername = users[posts[i].ownerId].username;
-            newPost.owner = users[posts[i].ownerId];
+
+        if (users[ownerId]) {
+            newPost.ownerUsername = users[ownerId].username;
+            newPost.owner = users[ownerId];
             transformedPosts.push(newPost);
             // eslint-disable-next-line no-continue
             continue;
         }
+
         try {
             const owner = await singleQuery(
                 postQueryId,
@@ -47,9 +54,9 @@ async function expandOwnerDetails(posts, page, itemSpec) {
                 itemSpec,
                 'Owner details',
             );
-            users[posts[i].ownerId] = owner;
-            newPost.ownerUsername = users[posts[i].ownerId].username;
-            newPost.owner = users[posts[i].ownerId];
+            users[ownerId] = owner;
+            newPost.ownerUsername = users[ownerId].username;
+            newPost.owner = users[ownerId];
         } catch (e) {
             Apify.utils.log.debug(`${e.message}`, posts[i]);
         }

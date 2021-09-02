@@ -1,9 +1,11 @@
 const Apify = require('apify');
+const delay = require('delayable-idle-abort-promise').default;
 // eslint-disable-next-line no-unused-vars
 const Puppeteer = require('puppeteer');
 const { getCheckedVariable, log, finiteScroll, filterPushedItemsAndUpdateState, shouldContinueScrolling } = require('./helpers');
 const { PAGE_TYPES, LOG_TYPES } = require('./consts');
 const { formatSinglePost } = require('./details');
+const { expandOwnerDetails } = require('./user-details');
 
 const { sleep } = Apify.utils;
 
@@ -89,12 +91,15 @@ const getPostsFromEntryData = (pageType, data) => {
 };
 
 /**
- * @param {Apify.Request} request
- * @param {any} itemSpec
- * @param {any} entryData
- * @param {any} additionalData
+ * @param {{
+ *   page: Puppeteer.Page,
+ *   request: Apify.Request,
+ *   itemSpec: Record<string, any>,
+ *   entryData: Record<string, any>,
+ *   additionalData: Record<string, any>
+ * }} params
  */
-const scrapePost = (request, itemSpec, entryData, additionalData) => {
+const scrapePost = async ({ request, itemSpec, page, entryData, additionalData }) => {
     const item = (() => {
         try {
             return entryData.PostPage[0].graphql.shortcode_media;
@@ -103,13 +108,13 @@ const scrapePost = (request, itemSpec, entryData, additionalData) => {
         }
     })();
 
-    return {
+    let result = {
         '#debug': {
             ...Apify.utils.createRequestDebugInfo(request),
             ...itemSpec,
             shortcode: item.shortcode,
-            postLocationId: (item.location && item.location.id) || null,
-            postOwnerId: (item.owner && item.owner.id) || null,
+            postLocationId: item.location?.id ?? null,
+            postOwnerId: item.owner?.id ?? null,
         },
         alt: item.accessibility_caption,
         url: `https://www.instagram.com/p/${item.shortcode}`,
@@ -117,9 +122,15 @@ const scrapePost = (request, itemSpec, entryData, additionalData) => {
         imageUrl: item.display_url,
         firstComment: item.edge_media_to_caption.edges[0] && item.edge_media_to_caption.edges[0].node.text,
         timestamp: new Date(parseInt(item.taken_at_timestamp, 10) * 1000).toISOString(),
-        locationName: (item.location && item.location.name) || null,
-        ownerUsername: (item.owner && item.owner.username) || null,
+        locationName: item.location?.name ?? null,
+        ownerUsername: item.owner?.username ?? null,
     };
+
+    if (itemSpec.input.expandOwners && itemSpec.pageType !== PAGE_TYPES.PROFILE) {
+        [result] = await expandOwnerDetails([result], page, itemSpec);
+    }
+
+    return result;
 };
 
 /**
@@ -165,6 +176,8 @@ const scrapePosts = async ({ page, itemSpec, requestQueue, entryData, fromRespon
                     label: 'postDetail',
                     pageType: PAGE_TYPES.POST,
                 },
+            }, {
+                forefront: true,
             });
 
             if (!rq.wasAlreadyPresent) {
@@ -263,20 +276,45 @@ const scrapePosts = async ({ page, itemSpec, requestQueue, entryData, fromRespon
         if (timeline.needsEnqueue) {
             log(itemSpec, 'Scrolling until the end', LOG_TYPES.INFO);
 
-            while (true) { // eslint-disable-line no-constant-condition
-                if (Object.keys(scrollingState[itemSpec.id].ids).length >= itemSpec.limit) {
-                    return;
-                }
+            const race = delay(30000, 1000);
 
-                await page.evaluate(() => {
-                    window.scrollTo({ top: document.body.scrollHeight });
-                });
+            try {
+                await race.run([
+                    (async () => {
+                        let lastHeight = 0;
 
-                await sleep(itemSpec.scrollWaitMillis || 3000);
+                        while (true) { // eslint-disable-line no-constant-condition
+                            if (Object.keys(scrollingState[itemSpec.id].ids).length >= itemSpec.limit) {
+                                return;
+                            }
 
-                await page.evaluate(() => {
-                    window.scrollTo({ top: document.body.scrollHeight * 0.70 });
-                });
+                            await page.evaluate(async () => {
+                                window.scrollTo({ top: document.body.scrollHeight });
+                            });
+
+                            await sleep(itemSpec.scrollWaitMillis || 3000);
+
+                            await page.evaluate(async () => {
+                                window.scrollTo({ top: document.body.scrollHeight * 0.70 });
+                            });
+
+                            const stats = await page.evaluate(async () => ({
+                                height: document.body.clientHeight,
+                                scroll: document.body.scrollHeight,
+                            }));
+
+                            Apify.utils.log.debug('Scrolling', stats);
+
+                            if (lastHeight !== stats.scroll) {
+                                lastHeight = stats.scroll;
+                                race.postpone();
+                            }
+                        }
+                    })(),
+                ]);
+            } catch (e) {
+                Apify.utils.log.debug(e.message, itemSpec);
+                throw new Error(`Loading of posts stopped, retrying...`);
             }
         } else {
             const hasNextPage = initData[itemSpec.id].hasNextPage && hasMostRecentPostsOnHashtagPage;
