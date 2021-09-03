@@ -104,10 +104,10 @@ Apify.main(async () => {
     }
 
     const doRequest = helpers.createGotRequester({
-        proxyConfiguration: await Apify.createProxyConfiguration({
+        proxyConfiguration: proxyConfiguration?.usesApifyProxy === true ? await Apify.createProxyConfiguration({
             groups: ['RESIDENTIAL'],
             countryCode: 'US',
-        }),
+        }) : proxyConfiguration,
     });
 
     /** @type {string[]} */
@@ -275,7 +275,7 @@ Apify.main(async () => {
 
             // make sure the post page don't scroll outside when scrolling for comments,
             // otherwise it will hang forever. place the additionalData back
-            await page.evaluateOnNewDocument((pageType) => {
+            await page.evaluateOnNewDocument(() => {
                 window.__bufferedErrors = window.__bufferedErrors || [];
 
                 window.addEventListener('load', () => {
@@ -299,7 +299,7 @@ Apify.main(async () => {
                             }
                         }
 
-                        if (!loaded && tries++ < 30) {
+                        if (!loaded && tries++ < 100) {
                             setTimeout(patch, 300);
                         }
                     };
@@ -329,7 +329,7 @@ Apify.main(async () => {
 
                     setTimeout(closeModal, 3000);
                 });
-            }, request.userData.pageType);
+            });
 
             const { pageType } = request.userData;
             Apify.utils.log.info(`Opening page type: ${pageType} on ${request.url}`);
