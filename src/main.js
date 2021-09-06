@@ -625,6 +625,7 @@ Apify.main(async () => {
                         case SCRAPE_TYPES.POSTS:
                             await scrapePosts({
                                 page,
+                                request,
                                 itemSpec,
                                 additionalData,
                                 entryData,
@@ -683,7 +684,7 @@ Apify.main(async () => {
             }
         },
         handleFailedRequestFunction: async ({ request, error }) => {
-            Apify.utils.log.exception(error, `${request.url}: Request failed ${maxRequestRetries + 1} times, not retrying any more`);
+            Apify.utils.log.exception(error, `${request.url}: Request failed ${request.retryCount} times, not retrying any more`);
 
             await Apify.pushData({
                 '#debug': Apify.utils.createRequestDebugInfo(request),

@@ -138,6 +138,7 @@ const scrapePost = async ({ request, itemSpec, page, entryData, additionalData }
  * @param {{
  *   page: Puppeteer.Page,
  *   itemSpec: any,
+ *   request: Apify.Request,
  *   additionalData: any,
  *   entryData: Record<string, any>,
  *   scrollingState: Record<string, any>,
@@ -147,7 +148,7 @@ const scrapePost = async ({ request, itemSpec, page, entryData, additionalData }
  *   fromResponse: boolean,
  * }} params
  */
-const scrapePosts = async ({ page, itemSpec, requestQueue, entryData, fromResponse = false, scrollingState, extendOutputFunction, additionalData, resultsType }) => {
+const scrapePosts = async ({ page, itemSpec, request, requestQueue, entryData, fromResponse = false, scrollingState, extendOutputFunction, additionalData, resultsType }) => {
     const timeline = getPostsFromEntryData(itemSpec.pageType, entryData);
 
     if (!timeline) {
@@ -223,6 +224,11 @@ const scrapePosts = async ({ page, itemSpec, requestQueue, entryData, fromRespon
     }
 
     if (itemSpec.pageType === PAGE_TYPES.PLACE || itemSpec.pageType === PAGE_TYPES.HASHTAG) {
+        if ((await page.$$('.YlEaT')).length > 0) {
+            request.noRetry = true;
+            throw new Error('No posts on page');
+        }
+
         try {
             await page.waitForSelector('.EZdmt', { timeout: 25000 });
         } catch (e) {
