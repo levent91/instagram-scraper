@@ -66,12 +66,6 @@
             "description": "How many times a page will be retried in case of being blocked or other errors.",
             "default": 5
         },
-        "scrapePostsUntilDate": {
-            "title": "Scrape until date",
-            "type": "string",
-            "description": "Scrapes post from the current date until it reaches a post older than a provided date. The date should be in format YYYY-MM-DD. By default scrapes all posts.",
-            "editor": "hidden"
-        },
         "fromDate": {
             "title": "Scrape from date",
             "type": "string",
