@@ -283,15 +283,22 @@ const scrapePosts = async ({ page, itemSpec, request, requestQueue, entryData, f
             log(itemSpec, 'Scrolling until the end', LOG_TYPES.INFO);
 
             const race = delay(30000, 1000);
+            let aborted = false;
 
             try {
+                // non moving scrollHeight usually means the tab is in the background and
+                // the page interaction isn't working
                 await race.run([
                     (async () => {
                         let lastHeight = 0;
 
-                        while (true) { // eslint-disable-line no-constant-condition
+                        while (!aborted) {
                             if (Object.keys(scrollingState[itemSpec.id].ids).length >= itemSpec.limit) {
                                 return;
+                            }
+
+                            if (page.isClosed()) {
+                                break;
                             }
 
                             await page.evaluate(async () => {
@@ -321,6 +328,8 @@ const scrapePosts = async ({ page, itemSpec, request, requestQueue, entryData, f
             } catch (e) {
                 Apify.utils.log.debug(e.message, itemSpec);
                 throw new Error(`Loading of posts stopped, retrying...`);
+            } finally {
+                aborted = true;
             }
         } else {
             const hasNextPage = initData[itemSpec.id].hasNextPage && hasMostRecentPostsOnHashtagPage;

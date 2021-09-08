@@ -232,7 +232,9 @@ Apify.main(async () => {
         persistCookiesPerSession: false,
         useSessionPool: true,
         postNavigationHooks: [async ({ page }) => {
-            await page.bringToFront();
+            if (!page.isClosed()) {
+                await page.bringToFront();
+            }
         }],
         preNavigationHooks: [async ({ request, page, session }, gotoOptions) => {
             const locale = new URL(request.url).searchParams.get('hl');
