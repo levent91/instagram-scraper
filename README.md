@@ -1,59 +1,57 @@
-# Instagram Scraper
-
-## Instagram blocking access - proxies required
-
-Instagram aggressively blocks access for scrapers and redirects to a login page. Currently, the only reliable solution to this problem is to use residential proxies. Datacenter proxies work only in rare cases.
-
-### Apify residential proxies
-
-The Apify platform [provides residential proxies](https://apify.com/proxy?pricing=residential-ip#pricing) if you have a paid subscription. These proxies are provided only to be run within actors on the Apify platform, not externally. If you are interested in using residential proxies for this scraper, contact `support@apify.com` via email or in-app chat to get the proxies enabled (a small test is possible).
-
-### Custom proxies
-
-You can also use proxies from other providers in the custom proxies fields (`proxyUrls` in the JSON settings).
-
 ## Features
+Our free Instagram Scraper allows you to scrape posts from a user's profile page, hashtag page, or place. When a link to an Instagram post is provided, it can scrape Instagram comments.
 
-Since Instagram has removed the option to load public data through its API, this actor should help replace this functionality. It allows you to scrape posts from a user's profile page, hashtag page, or place. When a link to an Instagram post is provided, it can scrape Instagram comments.
+This unofficial Instagram API is designed to give you back the functionality to access public data that was  removed from the Instagram API in 2020. It also enables anyone to extract public data from Instagram without imposing limits on whether you are an Instagram Business or Creator, or whether you are accessing public consumer account data.
 
 The Instagram data scraper supports the following features:
 
 - Scrape profiles - you can either scrape posts or get metadata from the profile (including followers and following if logged in)
-
 - Scrape hashtags - query hashtags matched by search keyword - you can either scrape posts or scrape metadata from each hashtag
-
 - Scrape places/locations - query places matched by search keyword - you can either scrape posts or scrape metadata from each place (scrolling for more posts in places/locations is only possible when logged in)
-
 - Scrape comments - you can scrape comments from any post
-
 - Scrape likes - you can scrape likes from any post (if logged in)
 
-If you want to know more about how the Instagram Scraper works, here's a short introduction on the [Apify blog](https://blog.apify.com/scrape-instagram-posts-comments-and-more-21d05506aeb3/).
+## Why scrape Instagram?
+Instagram has about 1 billion monthly active users and is especially popular with younger users, a demographic that can otherwise be difficult for brands to reach. With so many active users, you can imagine that there is a lot of useful data on the site. 
+
+So what could you do with that data? Here are some ideas:
+- Scrape hashtags and likes to see what's becoming popular. Maybe you can get involved early or create a niche product to take advantage of short-term trends.
+- Get data based on location to discover opportunities or risks that might affect your investment or business decisions.
+- Scrape comments to understand how real customers see your brand or business.
+- Find Instagram influencers who could help you promote your products, and track their engagement in real time.
+- Collect a constantly updated dataset on your industry, city, or interests and gain insights into ongoing change.
+- Carry out market or academic research that goes beyond surveys and polls.
+
+If you want more ideas, check out our [industries pages](https://apify.com/industries) for ways web scraping is already being used in a wide range of companies.
+
+## Tutorial
+If you want to know more about how the Instagram Scraper works, here's a detailed explanation and [step-by-step guide](https://blog.apify.com/scrape-instagram-posts-comments-and-more-21d05506aeb3/) with screenshots and examples.
 
 ## Cost of usage
-
-There are two main components to take into account if you want to run Instagram Scraper on the Apify platform:
+There are two main factors to take into account if you want to run Instagram Scraper on the Apify platform:
 - [Compute units](https://apify.com/pricing/actors) - used for running the scraper
 - [Residential proxy traffic](https://apify.com/pricing/proxy) - needed to access Instagram without login
 
 The usage costs differ depending on what type of page you are scraping. Some pages, such as details, just need to be opened, while other pages, such as comments, require a lot of scrolling. You should roughly compare how long it takes to do these operations manually to get an idea about how to transfer usage costs from one use case to another.
 
-### Free plan
+### Using proxies
+Instagram now aggressively blocks scrapers and redirects them to a login page. Currently, the only reliable solution to this problem is to use residential proxies. Datacenter proxies only work in rare cases.
 
-Apify provides a free plan where you can test your setup. You need to ask the support team to get access to the residential proxy as it is not included in the free plan.
+### Apify residential proxies
+The Apify platform [provides residential proxies](https://apify.com/proxy?pricing=residential-ip#pricing) if you have a paid subscription. These proxies are only available to be run within actors on the Apify platform, not externally. If you are interested in using residential proxies for this scraper, contact `support@apify.com` via email or in-app chat to get the proxies enabled.
+
+### Custom proxies
+You can also use proxies from other providers in the custom proxies fields (`proxyUrls` in the JSON settings).
 
 ### Profile scraping
-
-Scraping **1000 profiles** requires about:
+Scraping **1,000 profiles** requires about:
 - **10 Compute units**
 - **0.24 GB of proxy traffic**
 
-#### Example pricing
-
-Based on Apify's pricing at the time of writing, scraping **1000 profiles** would cost 10 CU * $0.25 + 0.24 GB * 12.5 GB which is a total of **$5.5**. The Personal plan ($49) would allow you to scrape about 9000 Instagram profiles monthly.
+### Example pricing
+Based on Apify's pricing at the time of writing, scraping **1,000 profiles** would cost 10 CU * $0.25 + 0.24 GB * 12.5 GB, which is a total of **$5.50**. The Personal plan ($49) would allow you to scrape about 9,000 Instagram profiles monthly.
 
 ## Input parameters
-
 The input of this scraper should be JSON containing the list of pages on Instagram that should be visited. Required fields are:
 
 | Field | Type | Description |
@@ -63,22 +61,19 @@ The input of this scraper should be JSON containing the list of pages on Instagr
 | searchType | String | (optional, required with search) What to search Instagram for, default is "hashtag", other options are "user" or "place"  |
 | searchLimit | Integer | (optional) How many search results to process, default is 20, maximum is 100. Set to 1 if you want to get the most matched one |
 | directUrls | Array | (optional) List of Instagram URLs (profile or hashtag or place) |
-| resultsType | String | What to scrape from each page, default is "posts" the other option is "comments" |
+| resultsType | String | What to scrape from each page, default is "posts", the other option is "comments" |
 | resultsLimit | Integer | How many items should be loaded from each URL (limit is per page) |
 | proxy | Object | Proxy configuration |
 | scrapePostsUntilDate | String | (optional) Date in the past when you stop scrolling older posts |
-| scrollWaitSecs | Number | How long to wait every 100 scrolled items to prevent blocking by Instagram. This number is randomized. Default is 10 seconds |
+| scrollWaitSecs | Number | How long to wait between every 100 scrolled items to prevent blocking by Instagram. This number is randomized. Default is 10 seconds. |
 | loginCookies | Array | (optional) Cookies copied from logged in profile (for example using EditThisCookie extension) |
 | likedByLimit | Number | (optional) How many likes should be scraped from post page (only works with login) |
 | followingLimit | Number | (optional) How many following should be scraped from profile page (only works with login) |
 | followedByLimit | Number | (optional) How many followers should be scraped from profile page (only works with login) |
 | expandOwners | Boolean | (optional) **!Experimental!** Load additional details about post owner for each post (slows down the solution a lot) |
 
-This solution requires the use of **Proxy servers**, either your own proxy servers or you can use [Apify Proxy](https://apify.com/proxy).
-
 ## Scrolling through large profiles or posts
-
-Instagram imposes rate limits that will block scrolling if you want to scroll for more than 1000 posts or comments. To work around this issue, the scraper starts injecting randomized wait times once you reach 1000 posts or comments. This is configurable by means of the `scrollWaitSecs` input parameter. If you get the message that you were rate limited, consider increasing this parameter for the specific profile or post.
+Instagram imposes rate limits that will block scrolling if you want to scroll for more than 1,000 posts or comments. To work around this issue, the scraper starts injecting randomized wait times once you reach 1,000 posts or comments. This is configurable by means of the `scrollWaitSecs` input parameter. If you get the message that you were rate limited, consider increasing this parameter for the specific profile or post.
 
 ### Instagram scraper Input example
 
@@ -94,24 +89,23 @@ Instagram imposes rate limits that will block scrolling if you want to scroll fo
 ```
 
 ## During the actor run
+During the run, the actor will output messages letting you know what's going on. Each message always contains a short label specifying which page from the provided list is currently being scraped. When items are loaded from the page, you should see a message about this event with a loaded item count and total item count for each page, in most cases.
 
-During the run, the actor will output messages letting you know what is going on. Each message always contains a short label specifying which page from the provided list is currently being scraped. When items are loaded from the page, you should see a message about this event with a loaded item count and total item count for each page, in most cases.
-
-If you provide incorrect input to the actor, it will immediately stop with failure state and output an explanation of what is wrong.
+If you provide incorrect input to the actor, it will immediately stop with a failure state and output an explanation of what is wrong.
 
 ## Using cookies to log in
-
 This solution allows you to log in using the already initialized cookies of a logged-in user. If you use this option, the scraper will do as much as possible to prevent the account from being banned (slow down to just one page open at a time and introduce delays between actions).
 
-**It's highly recommended not to use your own account (unless you have to). You should instead create a new Instagram account to use with this solution.**
+**It's highly recommended that you don't use your own account (unless you really have to). You should instead create a new Instagram account to use with this solution.**
+
 **Using your own account can result in the account being banned by Instagram.**
 
-To log in using cookies. I recommend using a Chrome browser extension like [EditThisCookie](https://chrome.google.com/webstore/detail/editthiscookie/fngmhnnpilhplaeedifhccceomclgfbg?hl=cs). With it, just go to Instagram,
-log in with the account you want to use and then use the extension to export cookies. This should give you an array of cookies which you can then just paste as a value for the `loginCookies` field in input.
+To log in using cookies, you can use a Chrome browser extension such as [EditThisCookie](https://chrome.google.com/webstore/detail/editthiscookie/fngmhnnpilhplaeedifhccceomclgfbg?hl=cs). With it, just go to Instagram, log in with the account you want to use and then use the extension to export cookies. This should give you an array of cookies which you can then just paste as a value for the `loginCookies` field in input.
 
 **If you log out of the Instagram account that is connected to the cookies, it will invalidate them and your solution will stop working.**
 
 You can also provide your username and password as input and set the "What to scrape from each page" to be "Cookies".
+
 You'll need to provide a 2FA code (SMS or email) to continue with the login by going to the "Live View" tab of your run when instructed to do so:
 
 ```
@@ -135,13 +129,11 @@ You'll need to provide a 2FA code (SMS or email) to continue with the login by g
 You'll also need to allow the connection in your Instagram account security settings.
 
 ## Instagram output format
-
 The actor stores its results in a dataset. Each item is a separate item in the dataset.
 
 You can manage the results in any language (Python, PHP, Node JS/NPM). See [our API reference](https://docs.apify.com/api/v2) to learn more about getting results from the Instagram Scraper.
 
 ### Scraped Instagram posts
-
 The structure of each item in Instagram posts when scrolling looks like this:
 
 ```jsonc
@@ -185,7 +177,6 @@ The structure of each item in Instagram posts when scrolling looks like this:
 ```
 
 ### Scraped Instagram comments
-
 The structure of each item in Instagram comments looks like this:
 
 ```jsonc
@@ -212,7 +203,6 @@ The structure of each item in Instagram comments looks like this:
 ```
 
 ### Scraped Instagram profile
-
 The structure of each user profile looks like this:
 
 ```jsonc
@@ -279,7 +269,6 @@ The structure of each user profile looks like this:
 ```
 
 ### Scraped Instagram hashtag
-
 The structure of each hashtag detail looks like this:
 
 ```jsonc
@@ -328,7 +317,6 @@ The structure of each hashtag detail looks like this:
 ```
 
 ### Scraped Instagram place
-
 The structure of each place detail looks like this:
 
 ```jsonc
@@ -390,7 +378,6 @@ The structure of each place detail looks like this:
 ```
 
 ### Scraped Instagram post details
-
 The structure of each post detail looks like this:
 
 ```jsonc
@@ -448,7 +435,6 @@ The structure of each post detail looks like this:
 ```
 
 ## Extend output function
-
 You can use this function to update the result output of this actor.
 
 Return `null` to omit the output of the item.
@@ -482,7 +468,7 @@ async ({ data, item, itemSpec, page, request, customData, label }) => {
 This example will add a new field `additionalField` that comes from the input, change the `alt` field and remove `displayResourceUrls` field.
 Note that the return value of this function has to be an object or an array.
 
-You can split your result into individual items, like to make it CSV friendly or to output one item per profile post, for example:
+You can split your result into individual items, so as to make it CSV friendly or to output one item per profile post, for example:
 
 ```js
 async ({ data, item, itemSpec, page, request, customData, label }) => {
@@ -504,8 +490,7 @@ async ({ data, item, itemSpec, page, request, customData, label }) => {
 ```
 
 ## Extend Scraper Function
-
-This parameter allows you to add additional functionalities to the scraper. You can access inner functionalities, add profiles, posts and searches on-the-fly:
+This parameter allows you to add additional functionalities to the scraper. You can access inner functionalities, add profiles, posts and searches on the fly:
 
 ```js
 async ({ label, addProfile, addLocation, crawler, Apify }) => {
@@ -520,7 +505,7 @@ async ({ label, addProfile, addLocation, crawler, Apify }) => {
 }
 ```
 
-You can interact with the page as well:
+You can also interact with the page:
 
 ```js
 async ({ page, label, response, Apify }) => {
@@ -538,11 +523,11 @@ async ({ page, label, response, Apify }) => {
     }
 }
 ```
+## Personal data
+You should be aware that your results could contain personal data. Personal data is protected by GDPR in the European Union and by other regulations around the world. You should not scrape personal data unless you have a legitimate reason to do so. If you're unsure whether your reason is legitimate, consult your lawyers. You can also read our blog post on the [legality of web scraping](https://blog.apify.com/is-web-scraping-legal/).
 
 ## Changelog
-
 This scraper is under active development, so check [CHANGELOG.md](./CHANGELOG.md) for new features and fixes.
 
-## Acknowledgments
-
-This scraper clicks cookies and privacy consent dialogs on your behalf
+## Notes
+This scraper clicks cookies and privacy consent dialogs on your behalf.
