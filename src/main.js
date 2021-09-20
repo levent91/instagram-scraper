@@ -643,6 +643,7 @@ Apify.main(async () => {
                                 extendOutputFunction,
                                 includeHasStories,
                                 includeTaggedPosts,
+                                additionalData,
                             });
                             break;
                         case SCRAPE_TYPES.STORIES:

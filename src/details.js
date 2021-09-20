@@ -1,6 +1,6 @@
 const Apify = require('apify');
 const Puppeteer = require('puppeteer'); // eslint-disable-line no-unused-vars
-const { log, parseCaption, singleQuery } = require('./helpers');
+const { log, parseCaption, singleQuery, dataPaths } = require('./helpers');
 const { PAGE_TYPES } = require('./consts');
 const { getPostLikes } = require('./likes');
 const { getProfileFollowedBy } = require('./followed_by');
@@ -225,16 +225,18 @@ const formatPostOutput = async (input, request, data, page, itemSpec) => {
 };
 
 // Finds correct variable in window._shared_data.entry_data based on pageType
-const getOutputFromEntryData = async ({ input, itemSpec, request, entryData, page, includeTaggedPosts }) => {
+const getOutputFromEntryData = async ({ input, itemSpec, additionalData, request, entryData, page, includeTaggedPosts }) => {
+    await Apify.setValue('DATA', { entryData, additionalData });
+
     switch (itemSpec.pageType) {
         case PAGE_TYPES.PLACE:
-            return formatPlaceOutput(request, entryData.LocationsPage[0].graphql.location);
+            return formatPlaceOutput(request, dataPaths.LocationPage({ entryData, additionalData }));
         case PAGE_TYPES.PROFILE:
-            return formatProfileOutput(input, request, entryData.ProfilePage[0].graphql.user, page, itemSpec, includeTaggedPosts);
+            return formatProfileOutput(input, request, dataPaths.ProfilePage({ entryData, additionalData }), page, itemSpec, includeTaggedPosts);
         case PAGE_TYPES.HASHTAG:
-            return formatHashtagOutput(request, entryData.TagPage[0].graphql.hashtag);
+            return formatHashtagOutput(request, dataPaths.TagPage({ entryData, additionalData }));
         case PAGE_TYPES.POST:
-            return formatPostOutput(input, request, entryData.PostPage[0].graphql.shortcode_media, page, itemSpec);
+            return formatPostOutput(input, request, dataPaths.PostPage({ entryData, additionalData }), page, itemSpec);
         default:
             throw new Error('Not supported');
     }
@@ -250,14 +252,15 @@ const getOutputFromEntryData = async ({ input, itemSpec, request, entryData, pag
  *   extendOutputFunction: (data: any, meta: any) => Promise<void>,
  *   includeHasStories: boolean,
  *   includeTaggedPosts: boolean,
+ *    additionalData: any,
  * }} params
  */
-const scrapeDetails = async ({ input, request, itemSpec, data, page, includeHasStories, includeTaggedPosts, extendOutputFunction }) => {
+const scrapeDetails = async ({ input, request, additionalData, itemSpec, data, page, includeHasStories, includeTaggedPosts, extendOutputFunction }) => {
     const entryData = data.entry_data;
     let hasPublicStories;
     if (includeHasStories) hasPublicStories = await loadPublicStories({ page, data, itemSpec });
 
-    const output = await getOutputFromEntryData({ input, itemSpec, request, entryData, page, includeTaggedPosts });
+    const output = await getOutputFromEntryData({ input, itemSpec, additionalData, request, entryData, page, includeTaggedPosts });
 
     if (includeHasStories) output.hasPublicStory = hasPublicStories?.user?.has_public_story ?? false;
 

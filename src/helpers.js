@@ -82,20 +82,57 @@ const getPageTypeFromUrl = (url) => {
 };
 
 /**
+ * @type {Record<string, (params: { entryData: any, additionalData: any }) => Record<string, any>>}
+ */
+const dataPaths = {
+    LocationsPage: ({ entryData, additionalData }) => coalesce([
+        { obj: entryData,
+            paths: [
+                'LocationsPage[0].graphql.location',
+                'LocationsPage[0].native_location_data.location_info',
+            ] },
+        { obj: additionalData,
+            paths: [
+                'graphql.location',
+                'LocationsPage[0].graphql.location',
+                'LocationsPage[0].native_location_data.location_info',
+            ],
+        },
+    ]),
+    TagPage: ({ entryData, additionalData }) => coalesce([
+        { obj: entryData,
+            paths: [
+                'TagPage[0].graphql.hashtag',
+                'TagPage[0].data',
+            ],
+        },
+        { obj: additionalData,
+            paths: [
+                'graphql.hashtag',
+                'TagPage[0].graphql.hashtag',
+                'TagPage[0].data',
+            ],
+        },
+    ]),
+    ProfilePage: ({ entryData, additionalData }) => coalesce([
+        { obj: entryData, paths: ['ProfilePage[0].graphql.user'] },
+        { obj: additionalData, paths: ['graphql.user'] },
+    ]),
+    PostPage: ({ entryData, additionalData }) => coalesce([
+        { obj: entryData, paths: ['PostPage[0].graphql.shortcode_media'] },
+        { obj: additionalData, paths: ['graphql.shortcode_media'] },
+    ]),
+};
+
+/**
  * Takes object from _sharedData.entry_data and parses it into simpler object
  * @param {Record<string, any>} entryData
  * @param {Record<string, any>} additionalData
  */
 const getItemSpec = (entryData, additionalData) => {
     if (entryData.LocationsPage) {
-        const itemData = coalesce([
-            { obj: entryData,
-                paths: [
-                    'LocationsPage[0].graphql.location',
-                    'LocationsPage[0].native_location_data.location_info',
-                ] },
-            { obj: additionalData, paths: ['graphql.location'] },
-        ]);
+        const itemData = dataPaths.LocationsPage({ entryData, additionalData });
+
         return {
             pageType: PAGE_TYPES.PLACE,
             id: itemData.slug ?? itemData.location_id,
@@ -106,15 +143,8 @@ const getItemSpec = (entryData, additionalData) => {
     }
 
     if (entryData.TagPage) {
-        const itemData = coalesce([
-            { obj: entryData,
-                paths: [
-                    'TagPage[0].graphql.hashtag',
-                    'TagPage[0].data',
-                ],
-            },
-            { obj: additionalData, paths: ['graphql.hashtag'] },
-        ]);
+        const itemData = dataPaths.TagPage({ entryData, additionalData });
+
         return {
             pageType: PAGE_TYPES.HASHTAG,
             id: itemData.name,
@@ -124,10 +154,8 @@ const getItemSpec = (entryData, additionalData) => {
     }
 
     if (entryData.ProfilePage) {
-        const itemData = coalesce([
-            { obj: entryData, paths: ['ProfilePage[0].graphql.user'] },
-            { obj: additionalData, paths: ['graphql.user'] },
-        ]);
+        const itemData = dataPaths.ProfilePage({ entryData, additionalData });
+
         return {
             pageType: PAGE_TYPES.PROFILE,
             id: itemData.username,
@@ -138,10 +166,7 @@ const getItemSpec = (entryData, additionalData) => {
     }
 
     if (entryData.PostPage) {
-        const itemData = coalesce([
-            { obj: entryData, paths: ['PostPage[0].graphql.shortcode_media'] },
-            { obj: additionalData, paths: ['graphql.shortcode_media'] },
-        ]);
+        const itemData = dataPaths.PostPage({ entryData, additionalData });
 
         return {
             pageType: PAGE_TYPES.POST,
@@ -1018,4 +1043,5 @@ module.exports = {
     createGotRequester,
     patchLog,
     patchInput,
+    dataPaths,
 };
