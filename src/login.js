@@ -127,13 +127,20 @@ const login = async (username, password, page) => {
  *  maxErrorCount: number,
  * }} param
  */
-const loginManager = ({ loginCookies, maxErrorCount }) => {
+const loginManager = async ({ loginCookies, maxErrorCount }) => {
     /**
      * @type {Map<number, { index: number, uses: number, errors: number, cookies: any[] }>}
      */
-    const logins = new Map();
+    const logins = new Map((await Apify.getValue('LOGIN_STATE')) || []);
 
     if (loginCookies && loginCookies.length > 0) {
+        const saveLoginState = async () => {
+            await Apify.setValue('LOGIN_STATE', [...logins.entries()]);
+        };
+
+        Apify.events.on('aborting', saveLoginState);
+        Apify.events.on('migrating', saveLoginState);
+
         if (Array.isArray(loginCookies[0])) {
             loginCookies.forEach((cookies, index) => {
                 logins.set(index, {

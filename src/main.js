@@ -36,6 +36,7 @@ Apify.main(async () => {
         includeHasStories = false,
         cookiesPerConcurrency = 1,
         blockMoreAssets = false,
+        includeTaggedPosts = false,
         checkProxyIp = false, // For internal debug
     } = input;
 
@@ -53,7 +54,7 @@ Apify.main(async () => {
     Apify.events.on('persistState', persistState);
 
     let maxConcurrency = input.maxConcurrency || 1000;
-    const logins = loginManager({
+    const logins = await loginManager({
         loginCookies,
         maxErrorCount,
     });
@@ -284,32 +285,7 @@ Apify.main(async () => {
                 window.__bufferedErrors = window.__bufferedErrors || [];
 
                 window.addEventListener('load', () => {
-                    let loaded = false;
-                    let tries = 0;
-
-                    const patched = (path, data) => {
-                        loaded = true;
-                        window.__additionalData = {
-                            [path]: { data },
-                        };
-                    };
-
-                    const patch = () => {
-                        for (const script of document.querySelectorAll('script')) {
-                            if (script.innerHTML.includes('window.__additionalDataLoaded(')) {
-                                try {
-                                    window.__additionalDataLoaded = patched;
-                                    window.eval(script.innerHTML);
-                                } catch (e) {}
-                            }
-                        }
-
-                        if (!loaded && tries++ < 100) {
-                            setTimeout(patch, 300);
-                        }
-                    };
-
-                    setTimeout(patch);
+                    window.onerror = () => {};
 
                     const closeModal = () => {
                         document.body.style.overflow = 'auto';
@@ -553,26 +529,11 @@ Apify.main(async () => {
                     && window?.__initialData?.data);
             }, { timeout: 20000 });
 
-            try {
-                // this happens in the evaluateOnNewDocument, so we wait a bit
-                await page.waitForFunction(() => {
-                    return (Object.keys(window?.__additionalData ?? {}).length > 0);
-                }, { timeout: 10000 });
-            } catch (e) {
-                log.debug('Additional data', { url: request.url, e: e.message });
-            }
-
             // eslint-disable-next-line no-underscore-dangle
             const { pending, data } = await page.evaluate(() => window.__initialData);
-            const additionalData = await page.evaluate(() => {
-                try {
-                    return Object.values(window.__additionalData)[0].data;
-                } catch (e) {
-                    return {};
-                }
-            });
 
             if (pending) throw new Error('Page took too long to load initial data, trying again.');
+
             if (!data || !data.entry_data) throw new Error('Page does not contain initial data, trying again.');
 
             const { entry_data: entryData } = data;
@@ -581,6 +542,30 @@ Apify.main(async () => {
                 session.retire();
                 throw errors.redirectedToLogin();
             }
+
+            const additionalData = await page.evaluate(async () => {
+                return new Promise((resolve) => {
+                    let tries = 30;
+
+                    const searchScripts = () => {
+                        const script = [...document.querySelectorAll('script')].find((s) => /graphql/.test(s.innerHTML) && /__additionalDataLoaded/.test(s.innerHTML));
+
+                        if (script) {
+                            try {
+                                return resolve(JSON.parse(script.innerHTML.split(/window\.__additionalDataLoaded\('[^']+?',/, 2)[1].slice(0, -2)));
+                            } catch (e) { }
+                        }
+
+                        if (tries-- > 0) {
+                            setTimeout(searchScripts, 300);
+                        } else {
+                            resolve({});
+                        }
+                    };
+
+                    setTimeout(searchScripts);
+                });
+            });
 
             const itemSpec = getItemSpec(entryData, additionalData);
 
@@ -657,6 +642,7 @@ Apify.main(async () => {
                                 page,
                                 extendOutputFunction,
                                 includeHasStories,
+                                includeTaggedPosts,
                             });
                             break;
                         case SCRAPE_TYPES.STORIES:

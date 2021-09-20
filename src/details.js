@@ -7,6 +7,28 @@ const { getProfileFollowedBy } = require('./followed_by');
 const { getProfileFollowing } = require('./following');
 const { QUERY_IDS } = require('./query_ids');
 
+/**
+ * @param {Puppeteer.Page} page
+ * @param {any} itemSpec
+ */
+const getTaggedPosts = async (page, itemSpec) => {
+    if (!itemSpec.userId) {
+        return undefined;
+    }
+
+    return singleQuery(
+        QUERY_IDS.taggedPosts,
+        {
+            id: itemSpec.userId,
+            first: 50,
+        },
+        (data) => data?.user?.edge_user_to_photos_of_you?.edges?.map(({ node }) => formatSinglePost(node)),
+        page,
+        itemSpec,
+        'Tagged post',
+    );
+};
+
 // Formats IGTV Video Post edge item into nicely formated output item
 const formatIGTVVideo = (edge) => {
     const { node } = edge;
@@ -106,9 +128,20 @@ const formatJSONAddress = (jsonAddress) => {
 };
 
 // Formats data from window._shared_data.entry_data.ProfilePage[0].graphql.user to nicer output
-const formatProfileOutput = async (input, request, data, page, itemSpec) => {
+/**
+ *
+ * @param {any} input
+ * @param {Apify.Request} request
+ * @param {any} data
+ * @param {Puppeteer.Page} page
+ * @param {any} itemSpec
+ * @param {boolean} [itemSpec]
+ */
+const formatProfileOutput = async (input, request, data, page, itemSpec, includeTaggedPosts = false) => {
     const following = await getProfileFollowing(page, itemSpec, input);
     const followedBy = await getProfileFollowedBy(page, itemSpec, input);
+    const taggedPosts = includeTaggedPosts ? await getTaggedPosts(page, itemSpec) : [];
+
     return {
         '#debug': Apify.utils.createRequestDebugInfo(request),
         id: data.id,
@@ -135,6 +168,7 @@ const formatProfileOutput = async (input, request, data, page, itemSpec) => {
         latestPosts: data.edge_owner_to_timeline_media ? data.edge_owner_to_timeline_media.edges.map((edge) => edge.node).map(formatSinglePost) : [],
         following,
         followedBy,
+        taggedPosts,
         hasPublicStory: data.has_public_story,
     };
 };
@@ -191,12 +225,12 @@ const formatPostOutput = async (input, request, data, page, itemSpec) => {
 };
 
 // Finds correct variable in window._shared_data.entry_data based on pageType
-const getOutputFromEntryData = async ({ input, itemSpec, request, entryData, page }) => {
+const getOutputFromEntryData = async ({ input, itemSpec, request, entryData, page, includeTaggedPosts }) => {
     switch (itemSpec.pageType) {
         case PAGE_TYPES.PLACE:
             return formatPlaceOutput(request, entryData.LocationsPage[0].graphql.location);
         case PAGE_TYPES.PROFILE:
-            return formatProfileOutput(input, request, entryData.ProfilePage[0].graphql.user, page, itemSpec);
+            return formatProfileOutput(input, request, entryData.ProfilePage[0].graphql.user, page, itemSpec, includeTaggedPosts);
         case PAGE_TYPES.HASHTAG:
             return formatHashtagOutput(request, entryData.TagPage[0].graphql.hashtag);
         case PAGE_TYPES.POST:
@@ -215,14 +249,15 @@ const getOutputFromEntryData = async ({ input, itemSpec, request, entryData, pag
  *   data: Record<string, any>,
  *   extendOutputFunction: (data: any, meta: any) => Promise<void>,
  *   includeHasStories: boolean,
+ *   includeTaggedPosts: boolean,
  * }} params
  */
-const scrapeDetails = async ({ input, request, itemSpec, data, page, includeHasStories, extendOutputFunction }) => {
+const scrapeDetails = async ({ input, request, itemSpec, data, page, includeHasStories, includeTaggedPosts, extendOutputFunction }) => {
     const entryData = data.entry_data;
     let hasPublicStories;
     if (includeHasStories) hasPublicStories = await loadPublicStories({ page, data, itemSpec });
 
-    const output = await getOutputFromEntryData({ input, itemSpec, request, entryData, page });
+    const output = await getOutputFromEntryData({ input, itemSpec, request, entryData, page, includeTaggedPosts });
 
     if (includeHasStories) output.hasPublicStory = hasPublicStories?.user?.has_public_story ?? false;
 

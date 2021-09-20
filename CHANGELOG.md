@@ -1,3 +1,14 @@
+### 2021-09-18
+
+Features:
+- Add "Include tagged posts"
+
+Fix:
+- Hashtag search with cookies
+
+Changes:
+- Save login state on migration
+
 ### 2021-08-02
 
 Features:

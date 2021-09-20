@@ -78,6 +78,8 @@ const getPostsFromEntryData = (pageType, data) => {
                 sections: [
                     ...(data?.recent?.sections ?? []),
                     ...(data?.top?.sections ?? []),
+                    ...(data?.TagPage?.[0]?.data?.top?.sections ?? []),
+                    ...(data?.TagPage?.[0]?.data?.recent?.sections ?? []),
                 ],
                 needsEnqueue: true,
             };

@@ -9,7 +9,7 @@
         "got-scraping": "^3.2.3",
         "delayable-idle-abort-promise": "^1.0.0",
         "moment": "^2.29.1",
-        "header-generator": "^1.1.2",
+        "header-generator": "^1.1.3",
         "puppeteer": "*"
     },
     "scripts": {
