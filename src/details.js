@@ -276,13 +276,15 @@ const scrapeDetails = async ({ input, request, additionalData, itemSpec, data, p
  * Load has_public_story from separate XHR request
  * @param {{
  *   page: Puppeteer.Page,
- *   data: any,
- *   itemSpec: any,
+ *   data: Record<string, any>,
+ *   itemSpec: Record<string, any>,
+ *   additionalData: Record<string, any>
  * }} params
  */
-const loadPublicStories = async ({ page, itemSpec, data }) => {
+const loadPublicStories = async ({ page, itemSpec, data, additionalData }) => {
     if (!data.entry_data.ProfilePage) throw new Error('Not a profile page');
-    const userId = data.entry_data.ProfilePage[0].graphql.user.id;
+    const userId = data.entry_data.ProfilePage[0].graphql.user.id
+        ?? additionalData?.graphql?.user?.id;
 
     try {
         return await singleQuery(

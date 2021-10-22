@@ -16,10 +16,13 @@ const initData = {};
  * correct list of posts based on the page type.
  * @param {{
  *   pageType: string,
- *   data: Record<string, any>
+ *   data: Record<string, any>,
+ *   additionalData?: Record<string, any>,
  * }} params
+ * @returns {{ posts: any[], hasNextPage: boolean, postsCount: number, needsEnqueue: boolean }},
+ * }}
  */
-const getPostsFromGraphQL = ({ pageType, data }) => {
+const getPostsFromGraphQL = ({ pageType, data, additionalData }) => {
     let timeline;
     switch (pageType) {
         case PAGE_TYPES.PLACE:
@@ -45,6 +48,14 @@ const getPostsFromGraphQL = ({ pageType, data }) => {
     const hasNextPage = timeline?.page_info?.has_next_page ?? false;
     const postsCount = timeline?.count ?? postItems.length;
 
+    if (!postsCount && additionalData) {
+        const inner = getPostsFromGraphQL({ pageType, data: additionalData });
+
+        if (inner.posts?.length) {
+            return inner;
+        }
+    }
+
     return {
         posts: postItems,
         hasNextPage,
@@ -58,8 +69,10 @@ const getPostsFromGraphQL = ({ pageType, data }) => {
  * correct list of posts based on the page type.
  * @param {string} pageType Type of page we are scraping posts from
  * @param {Record<string, any>} data GraphQL data
+ * @param {Record<string, any>} [additionalData] GraphQL data
+ * @returns {null | ReturnType<typeof getPostsFromGraphQL>}
  */
-const getPostsFromEntryData = (pageType, data) => {
+const getPostsFromEntryData = (pageType, data, additionalData) => {
     let pageData;
     switch (pageType) {
         case PAGE_TYPES.PLACE:
@@ -87,9 +100,17 @@ const getPostsFromEntryData = (pageType, data) => {
         default: throw new Error('Not supported');
     }
 
+    if (additionalData && (!pageData || (pageData.sections?.length === 0))) {
+        const inner = getPostsFromEntryData(pageType, additionalData);
+
+        if (inner) {
+            return inner;
+        }
+    }
+
     if (!pageData) return null;
 
-    return getPostsFromGraphQL({ pageType, data: pageData });
+    return getPostsFromGraphQL({ pageType, data: pageData, additionalData });
 };
 
 /**
@@ -151,7 +172,7 @@ const scrapePost = async ({ request, itemSpec, page, entryData, additionalData }
  * }} params
  */
 const scrapePosts = async ({ page, itemSpec, request, requestQueue, entryData, fromResponse = false, scrollingState, extendOutputFunction, additionalData, resultsType }) => {
-    const timeline = getPostsFromEntryData(itemSpec.pageType, entryData);
+    const timeline = getPostsFromEntryData(itemSpec.pageType, entryData, additionalData);
 
     if (!timeline) {
         return;
@@ -371,19 +392,25 @@ async function handlePostsGraphQLResponse({ page, response, scrollingState, exte
     const checkedVariable = getCheckedVariable(itemSpec.pageType);
 
     // Skip queries for other stuff then posts
-    if (!responseUrl.includes(checkedVariable) || !responseUrl.includes('%22first%22')) return;
+    if (!responseUrl.includes(checkedVariable) || !responseUrl.includes('%22first%22')) {
+        Apify.utils.log.debug('Skipping', { responseUrl, checkedVariable });
+        return;
+    }
 
     // If it fails here, it means that the error was caught in the finite scroll anyway so we just don't do anything
     let data;
     try {
         data = await response.json();
     } catch (e) {
+        Apify.utils.log.debug(e.message);
         return;
     }
+
     const timeline = getPostsFromGraphQL({ pageType: itemSpec.pageType, data: data.data });
 
-    if (!initData[itemSpec.id]) initData[itemSpec.id] = timeline;
-    else if (initData[itemSpec.id].hasNextPage && !timeline.hasNextPage) {
+    if (!initData[itemSpec.id]) {
+        initData[itemSpec.id] = timeline;
+    } else if (initData[itemSpec.id].hasNextPage && !timeline.hasNextPage) {
         initData[itemSpec.id].hasNextPage = false;
     }
 
@@ -395,6 +422,7 @@ async function handlePostsGraphQLResponse({ page, response, scrollingState, exte
         type: 'posts',
         page,
     });
+
     // We save last date for the option to specify how far into the past we should scroll
     if (postsReadyToPush.length > 0) {
         scrollingState[itemSpec.id].lastPostDate = postsReadyToPush[postsReadyToPush.length - 1].timestamp;

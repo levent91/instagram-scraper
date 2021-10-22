@@ -115,12 +115,32 @@ const dataPaths = {
         },
     ]),
     ProfilePage: ({ entryData, additionalData }) => coalesce([
-        { obj: entryData, paths: ['ProfilePage[0].graphql.user'] },
-        { obj: additionalData, paths: ['graphql.user'] },
+        { obj: entryData,
+            paths: [
+                'graphql.user',
+                'ProfilePage[0].graphql.user',
+            ],
+        },
+        { obj: additionalData,
+            paths: [
+                'graphql.user',
+                'ProfilePage[0].graphql.user',
+            ],
+        },
     ]),
     PostPage: ({ entryData, additionalData }) => coalesce([
-        { obj: entryData, paths: ['PostPage[0].graphql.shortcode_media'] },
-        { obj: additionalData, paths: ['graphql.shortcode_media'] },
+        { obj: entryData,
+            paths: [
+                'graphql.shortcode_media',
+                'PostPage[0].graphql.shortcode_media',
+            ],
+        },
+        { obj: additionalData,
+            paths: [
+                'graphql.shortcode_media',
+                'PostPage[0].graphql.shortcode_media',
+            ],
+        },
     ]),
 };
 

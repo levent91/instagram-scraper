@@ -1,3 +1,9 @@
+### 2021-10-22
+
+Fix:
+- Workaround for additional data loaded
+- Missing posts from profiles
+
 ### 2021-09-18
 
 Features:

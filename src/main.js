@@ -396,6 +396,7 @@ Apify.main(async () => {
                                 await scrapePosts({
                                     additionalData: {},
                                     entryData,
+                                    request,
                                     page,
                                     itemSpec: page.itemSpec,
                                     extendOutputFunction,
@@ -552,7 +553,7 @@ Apify.main(async () => {
 
                         if (script) {
                             try {
-                                return resolve(JSON.parse(script.innerHTML.split(/window\.__additionalDataLoaded\('[^']+?',/, 2)[1].slice(0, -2)));
+                                return resolve(JSON.parse(script.innerHTML.split(/window\.__additionalDataLoaded\([^,]+?,/, 2)[1].slice(0, -2)));
                             } catch (e) { }
                         }
 

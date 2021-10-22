@@ -108,7 +108,7 @@
             "title": "Max request retries",
             "type": "integer",
             "description": "Select how many times the page will be retried if the scraper is blocked or encounters other errors.",
-            "default": 5
+            "default": 7
         },
         "scrollWaitSecs": {
             "title": "Scroll wait seconds",
