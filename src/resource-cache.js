@@ -62,15 +62,15 @@ const resourceCache = (paths) => {
                 if (req.resourceType() === 'image') {
                     // serve empty images so the `onload` events don't fail
                     if (url.includes('.jpg') || url.includes('.jpeg')) {
-                        return req.respond(images.jpg);
+                        return await req.respond(images.jpg);
                     }
 
                     if (url.includes('.png')) {
-                        return req.respond(images.png);
+                        return await req.respond(images.png);
                     }
 
                     if (url.includes('.gif')) {
-                        return req.respond(images.gif);
+                        return await req.respond(images.gif);
                     }
                 } else if (['script', 'stylesheet'].includes(req.resourceType()) && paths.some((path) => path.test(url))) {
                     const content = cache.get(url);
@@ -78,7 +78,7 @@ const resourceCache = (paths) => {
                     // log.debug('Cache', { url, headers: content?.headers, type: content?.contentType, length: content?.content?.length });
 
                     if (content?.loaded === true) {
-                        return req.respond({
+                        return await req.respond({
                             body: content.content,
                             status: 200,
                             contentType: content.contentType,

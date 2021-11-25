@@ -5,9 +5,24 @@ const errors = require('./errors');
 const { log, sleep } = Apify.utils;
 
 // Helper functions that create direct links to search results
-const formatPlaceResult = (item) => `https://www.instagram.com/explore/locations/${item.place.location.pk}/${item.place.slug}/`;
-const formatUserResult = (item) => `https://www.instagram.com/${item.user.username}/`;
-const formatHashtagResult = (item) => `https://www.instagram.com/explore/tags/${item.hashtag.name}/`;
+/**
+ * @param {Record<string, any>} item
+ */
+const formatPlaceResult = (item) => {
+    return `https://www.instagram.com/explore/locations/${item.place.location.pk}/${item.place.slug}/`;
+};
+/**
+ * @param {Record<string, any>} item
+ */
+const formatUserResult = (item) => {
+    return `https://www.instagram.com/${item.user.username}/`;
+};
+/**
+ * @param {Record<string, any>} item
+ */
+const formatHashtagResult = (item) => {
+    return `https://www.instagram.com/explore/tags/${item.hashtag.name}/`;
+};
 
 /**
  * Attempts to query Instagram search and parse found results into direct links to instagram pages
@@ -93,7 +108,7 @@ const createLocationSearch = (requestQueue) => {
      */
     return async (locationId) => {
         if (+locationId != locationId) {
-            Apify.utils.log.warning(`Location id ${locationId} isn't a valid number`);
+            log.warning(`Location id ${locationId} isn't a valid number`);
             return;
         }
 

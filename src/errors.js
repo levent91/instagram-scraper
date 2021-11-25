@@ -1,4 +1,7 @@
-const { SCRAPE_TYPES, SEARCH_TYPES } = require('./consts');
+const {
+    SCRAPE_TYPES,
+    SEARCH_TYPES,
+} = require('./consts');
 
 module.exports = {
     redirectedToLogin: () => new Error('Page got redirected into login page. Instagram is blocking access. Retrying with different IP and browser. Make sure you are accessing public profile or being logged in'),
@@ -8,6 +11,7 @@ module.exports = {
     unsupportedPage: () => new Error('This instagram page is not supported.'),
     proxyIsRequired: () => new Error('Proxy is required to run this actor'),
     urlsAreRequired: () => new Error('Please provide urls configuration'),
+    rateLimited: () => new Error('Encountered a rate limit, will wait until trying again'),
     typeIsRequired: () => new Error('Type of scrape is required for the actor to run.'),
     unsupportedType: (type) => new Error(`Type "${type}" is not supported. Allowed types are "${Object.values(SCRAPE_TYPES).join('", "')}"`),
     // eslint-disable-next-line max-len
