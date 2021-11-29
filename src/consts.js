@@ -6,7 +6,7 @@ const Apify = require('apify');
  */
 
 /**
- * @typedef {{ entryData: Record<string, any>, additionalData: Record<string, any>, itemSpec: Record<string, any> }} IGData
+ * @typedef {{ entryData: Record<string, any>, additionalData: Record<string, any>, pageData: Record<string, any> }} IGData
  */
 
 /**

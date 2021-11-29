@@ -7,6 +7,106 @@ const { PAGE_TYPES, PAGE_TYPE_URL_REGEXES, GRAPHQL_ENDPOINT } = require('./const
 
 const { sleep, log } = Apify.utils;
 
+/**
+ * Parses the __additionalData from script tags, as the
+ * window property gets emptied after being consumed
+ *
+ * @param {Puppeteer.Page} page
+ */
+const getAdditionalData = (page) => {
+    return page.evaluate(async () => {
+        return new Promise((resolve) => {
+            let tries = 10;
+
+            const searchScripts = () => {
+                const script = [...document.querySelectorAll('script')].find((s) => /__additionalDataLoaded\(/.test(s.innerHTML));
+
+                if (script) {
+                    try {
+                        return resolve(JSON.parse(script.innerHTML.split(/window\.__additionalDataLoaded\([^,]+?,/, 2)[1].slice(0, -2)));
+                    } catch (e) { }
+                }
+
+                if (tries-- > 0) {
+                    setTimeout(searchScripts, 100);
+                } else {
+                    resolve({});
+                }
+            };
+
+            setTimeout(searchScripts);
+        });
+    });
+};
+
+/**
+ * Contains almost the same shape as _sharedData, can indicate the page load
+ * has finished loading
+ *
+ * @param {Puppeteer.Page} page
+ */
+const getEntryData = async (page) => {
+    try {
+        await page.waitForFunction(() => {
+            // eslint-disable-next-line no-underscore-dangle
+            return (window?.__initialData?.pending === false && !!(window?.__initialData?.data?.entry_data));
+        }, { timeout: 30000 });
+    } catch (e) {
+        throw new Error('Page took too long to load initial data, trying again.');
+    }
+
+    return page.evaluate(() => window.__initialData.data.entry_data);
+};
+
+/**
+ * fix instagram console errors, they forgot to add it to the window variable
+ * click consent dialogs if they popup.
+ *
+ * makes the page always scrollable even with a modal showing
+ *
+ * accepts any cookie modal when they randomly pop-up
+ *
+ * @param {Puppeteer.Page} page
+ */
+const addLoopToPage = async (page) => {
+    await page.evaluateOnNewDocument(() => {
+        window.__bufferedErrors = window.__bufferedErrors || [];
+
+        window.addEventListener('load', () => {
+            window.onerror = () => {};
+
+            const closeModal = () => {
+                document.body.style.overflow = 'auto';
+
+                const cookieModalButton = document.querySelectorAll('[role="presentation"] [role="dialog"] button:first-of-type');
+
+                for (const button of cookieModalButton) {
+                    if (!button.closest('#loginForm')) {
+                        button.click();
+                    } else {
+                        const loginModal = button.closest('[role="presentation"]');
+                        if (loginModal) {
+                            loginModal.remove();
+                        }
+                    }
+                }
+
+                setTimeout(closeModal, 100);
+            };
+
+            closeModal();
+        });
+    });
+};
+
+/**
+ * Creates a promise that can be resolved/rejected from the outside
+ * Allows to query for the resolved status.
+ *
+ * Uses setTimeout to schedule the resolving/rejecting to the next
+ * event loop, so things like Promise.race/all have a chance to attach
+ * to them.
+ */
 const deferred = () => {
     /** @type {(val: any) => void} */
     let resolve = () => {};
@@ -146,7 +246,7 @@ const query = async (
         } catch (error) {
             log.debug('query', { url, message: error.message });
 
-            if (error.message.includes(429)) {
+            if (error.message.includes('429')) {
                 log.warning(`${logPrefix} - Encountered rate limit error, waiting ${(retries + 1) * 10} seconds.`);
 
                 await sleep((retries++ + 1) * 10000);
@@ -239,7 +339,7 @@ const finiteQuery = async (hash, variables, nodeTransformationFunc, limit, page,
  * @param {string} logPrefix
  */
 const singleQuery = async (hash, variables, nodeTransformationFunc, page, logPrefix) => {
-    return this.query(
+    return query(
         `${GRAPHQL_ENDPOINT}?${queryHash({ hash, variables })}`,
         page,
         nodeTransformationFunc,
@@ -613,4 +713,7 @@ module.exports = {
     finiteQuery,
     acceptCookiesDialog,
     deferred,
+    addLoopToPage,
+    getEntryData,
+    getAdditionalData,
 };

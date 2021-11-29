@@ -1,4 +1,5 @@
 const Apify = require('apify');
+// eslint-disable-next-line no-unused-vars
 const Puppeteer = require('puppeteer');
 const delay = require('delayable-idle-abort-promise').default;
 
@@ -7,7 +8,7 @@ const consts = require('./consts');
 const { PAGE_TYPES, GRAPHQL_ENDPOINT } = consts;
 const BaseScraper = require('./scraper-base');
 
-const { formatDisplayResources, formatSinglePost, formatIGTVVideo } = require('./details');
+const { formatSinglePost } = require('./details');
 const errors = require('./errors');
 const helpers = require('./helpers');
 
@@ -17,7 +18,7 @@ class PublicScraper extends BaseScraper {
     /**
      * @param {consts.IGData} ig
      */
-    getItemSpec(ig) {
+    getPageData(ig) {
         const { entryData } = ig;
 
         if (entryData.LocationsPage) {
@@ -25,7 +26,7 @@ class PublicScraper extends BaseScraper {
 
             return {
                 pageType: PAGE_TYPES.PLACE,
-                id: itemData.id,
+                id: `${itemData.id}`,
                 address: itemData?.address_json ? JSON.parse(itemData.address_json) : {},
                 lat: itemData.lat,
                 lng: itemData.lng,
@@ -58,20 +59,7 @@ class PublicScraper extends BaseScraper {
             };
         }
 
-        if (entryData.PostPage) {
-            const itemData = entryData.PostPage[0].graphql.shortcode_media;
-
-            return {
-                pageType: PAGE_TYPES.POST,
-                id: itemData.shortcode,
-                postCommentsDisabled: itemData.comments_disabled,
-                postIsVideo: itemData.is_video,
-                postVideoViewCount: itemData.video_view_count || 0,
-                postVideoDurationSecs: itemData.video_duration || 0,
-            };
-        }
-
-        return super.getItemSpec(ig);
+        return super.getPageData(ig);
     }
 
     /**
@@ -81,28 +69,27 @@ class PublicScraper extends BaseScraper {
     async scrapeComments(context, ig) {
         const { extendOutputFunction } = this.options;
         const { page } = context;
-        const { entryData, itemSpec } = ig;
+        const { entryData, pageData } = ig;
 
         const timeline = this.getCommentsFromGraphQL(entryData.PostPage[0].graphql);
-        const state = this.initScrollingState(itemSpec.id);
+        const state = this.initScrollingState(pageData.id);
 
         // Public comments are preloaded on page load and can't be iterated
         await this.filterPushedItemsAndUpdateState(
             timeline.comments,
-            itemSpec.id,
+            pageData.id,
             (comments, position) => {
-                const result = this.parseCommentsForOutput(comments, itemSpec, position);
+                const result = this.parseCommentsForOutput(comments, pageData, position);
 
-                log.info(`${itemSpec.label} ${comments.length} comments loaded, ${Object.keys(state.ids).length}/${timeline.commentsCount} comments scraped`);
+                log.info(`${this.logLabel(context, ig)} ${comments.length} comments loaded, ${Object.keys(state.ids).length}/${timeline.commentsCount} comments scraped`);
 
                 return result;
             },
             async (comment) => {
                 await extendOutputFunction(comment, {
-                    ...context,
+                    context,
                     ig,
                     label: 'comment',
-                    page,
                 });
             },
         );
@@ -114,12 +101,10 @@ class PublicScraper extends BaseScraper {
      * @param {consts.IGData} ig
      */
     async scrapePostDetail(context, ig) {
-        await super.scrapePostDetail(context, ig);
-
         const { extendOutputFunction } = this.options;
 
         await extendOutputFunction(await this.scrapePost(context, ig), {
-            ...context,
+            context,
             ig,
             label: 'post',
         });
@@ -133,13 +118,20 @@ class PublicScraper extends BaseScraper {
     async scrapePosts(context, ig) {
         const { extendScraperFunction, extendOutputFunction } = this.options;
         const { page, request } = context;
-        const { itemSpec } = ig;
-        const { pageType } = itemSpec;
+        const { pageData } = ig;
+        const { pageType } = pageData;
 
-        const state = this.initScrollingState(itemSpec.id);
+        const state = this.initScrollingState(pageData.id);
 
         // Get variable we look for in the query string of request
-        const checkedVariable = helpers.getCheckedVariable(pageType);
+        const checkedVariable = (() => {
+            try {
+                return helpers.getCheckedVariable(pageType);
+            } catch (e) {
+                request.noRetry = true;
+                throw e;
+            }
+        })();
 
         // safety net for endless scrolling and no data being returned
         const control = delay(300000);
@@ -152,15 +144,15 @@ class PublicScraper extends BaseScraper {
         const pushPosts = (timeline, response = undefined) => {
             return this.filterPushedItemsAndUpdateState(
                 timeline.posts,
-                itemSpec.id,
+                pageData.id,
                 (items, position) => {
-                    log.info(`${itemSpec.label} ${items.length} posts loaded, ${Object.keys(state.ids).length}/${timeline.postsCount} posts scraped`);
+                    log.info(`${this.logLabel(context, ig)} ${items.length} posts loaded, ${Object.keys(state.ids).length}/${timeline.postsCount} posts scraped`);
 
-                    return this.parsePostsForOutput(items, itemSpec, position);
+                    return this.parsePostsForOutput(items, pageData, position);
                 },
                 async (item) => {
                     await extendOutputFunction(item, {
-                        ...context,
+                        context,
                         response,
                         ig,
                         label: 'post',
@@ -319,7 +311,7 @@ class PublicScraper extends BaseScraper {
      */
     getPostsFromEntryData(context, ig) {
         const { request } = context;
-        const { entryData, itemSpec: { pageType } } = ig;
+        const { entryData, pageData: { pageType } } = ig;
 
         let pageData;
         switch (pageType) {
@@ -395,32 +387,8 @@ class PublicScraper extends BaseScraper {
      * @param {consts.PuppeteerContext} context
      * @param {consts.IGData} ig
      */
-    async formatPostOutput(context, ig) {
-        const likedBy = await this.getPostLikes(context, ig);
-        const { entryData } = ig;
-
-        const data = entryData.PostPage[0].graphql.shortcode_media;
-
-        return {
-            ...formatSinglePost(data),
-            captionIsEdited: typeof data.caption_is_edited !== 'undefined' ? data.caption_is_edited : null,
-            hasRankedComments: data.has_ranked_comments,
-            commentsDisabled: data.comments_disabled,
-            displayResourceUrls: data.edge_sidecar_to_children ? formatDisplayResources(data.edge_sidecar_to_children.edges) : null,
-            childPosts: data.edge_sidecar_to_children ? data.edge_sidecar_to_children.edges.map((child) => formatSinglePost(child.node)) : null,
-            locationSlug: data.location ? data.location.slug : null,
-            isAdvertisement: typeof data.is_ad !== 'undefined' ? data.is_ad : null,
-            taggedUsers: data.edge_media_to_tagged_user ? data.edge_media_to_tagged_user.edges.map((edge) => edge.node.user.username) : [],
-            likedBy,
-        };
-    }
-
-    /**
-     * @param {consts.PuppeteerContext} context
-     * @param {consts.IGData} ig
-     */
     async scrapePost(context, ig) {
-        const { entryData, itemSpec } = ig;
+        const { entryData, pageData } = ig;
         const { expandOwners } = this.options.input;
 
         const item = entryData.PostPage[0].graphql.shortcode_media;
@@ -436,11 +404,11 @@ class PublicScraper extends BaseScraper {
             ownerUsername: item.owner?.username ?? null,
         };
 
-        if (expandOwners && itemSpec.pageType !== PAGE_TYPES.PROFILE) {
+        if (expandOwners && pageData.pageType !== PAGE_TYPES.PROFILE) {
             [result] = await this.expandOwnerDetails(context, [result]);
         }
 
-        return this.setDebugData(context, ig, result);
+        return result;
     }
 
     /**

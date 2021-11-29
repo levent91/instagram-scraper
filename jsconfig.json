@@ -5,6 +5,7 @@
         "strict": true,
         "checkJs": true,
         "noUnusedLocals": true,
+        "noImplicitThis": true,
         "lib": [
             "dom",
             "dom.iterable",

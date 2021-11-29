@@ -150,8 +150,9 @@ Apify.main(async () => {
                 ? minMaxDate.compare(attachedDate)
                 : true;
         },
-        output: async (data) => {
-            await Apify.pushData(data);
+        output: async (data, { context, ig }) => {
+            const { crawler } = context;
+            await Apify.pushData(crawler.setDebugData(context, ig, data));
         },
         input,
         key: 'extendOutputFunction',

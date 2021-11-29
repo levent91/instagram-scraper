@@ -84,36 +84,7 @@ class BaseScraper extends Apify.PuppeteerCrawler {
                     extraUrlPatterns: ABORT_RESOURCE_URL_INCLUDES,
                 });
 
-                // fix instagram console errors, they forgot to add it to the window variable
-                // click consent dialogs if they popup. fix their page
-                await page.evaluateOnNewDocument(() => {
-                    window.__bufferedErrors = window.__bufferedErrors || [];
-
-                    window.addEventListener('load', () => {
-                        window.onerror = () => {};
-
-                        const closeModal = () => {
-                            document.body.style.overflow = 'auto';
-
-                            const cookieModalButton = document.querySelectorAll('[role="presentation"] [role="dialog"] button:first-of-type');
-
-                            for (const button of cookieModalButton) {
-                                if (!button.closest('#loginForm')) {
-                                    button.click();
-                                } else {
-                                    const loginModal = button.closest('[role="presentation"]');
-                                    if (loginModal) {
-                                        loginModal.remove();
-                                    }
-                                }
-                            }
-
-                            setTimeout(closeModal, 100);
-                        };
-
-                        closeModal();
-                    });
-                });
+                await helpers.addLoopToPage(page);
 
                 const { pageType } = request.userData;
                 log.info(`Opening page type: ${pageType} on ${request.url}`);
@@ -121,11 +92,6 @@ class BaseScraper extends Apify.PuppeteerCrawler {
                 await memoryCache(page);
             }],
             maxRequestRetries: options.input.maxRequestRetries,
-            launchContext: {
-                launchOptions: {
-                    headless: Apify.isAtHome(), // for local debugging mainly
-                },
-            },
             browserPoolOptions: {
                 maxOpenPagesPerBrowser: 1,
                 preLaunchHooks: [async (pageId, launchContext) => {
@@ -137,7 +103,7 @@ class BaseScraper extends Apify.PuppeteerCrawler {
                         ...launchContext.launchOptions,
                         bypassCSP: true,
                         ignoreHTTPSErrors: true,
-                        devtools: rest.debugLog,
+                        devtools: rest.input.debugLog,
                         locale,
                     };
                 }],
@@ -179,6 +145,14 @@ class BaseScraper extends Apify.PuppeteerCrawler {
 
     /**
      * @param {consts.PuppeteerContext} context
+     * @param {consts.IGData} ig
+     */
+    logLabel({ request }, { pageData }) {
+        return `${helpers.uppercaseFirstLetter(pageData.pageType)} ${pageData.name || pageData.tagName || request.url}:`;
+    }
+
+    /**
+     * @param {consts.PuppeteerContext} context
      */
     async defaultHandler(context) {
         const { page, request, response, session } = context;
@@ -200,52 +174,18 @@ class BaseScraper extends Apify.PuppeteerCrawler {
             return;
         }
 
-        try {
-            await page.waitForFunction(() => {
-                // eslint-disable-next-line no-underscore-dangle
-                return (window?.__initialData?.pending === false && !!(window?.__initialData?.data?.entry_data));
-            }, { timeout: 30000 });
-        } catch (e) {
-            throw new Error('Page took too long to load initial data, trying again.');
-        }
-
-        // eslint-disable-next-line no-underscore-dangle
-        const entryData = await page.evaluate(() => window.__initialData.data.entry_data);
+        const entryData = await helpers.getEntryData(page);
 
         if (entryData.LoginAndSignupPage || entryData.LandingPage) {
             session.retire();
             throw errors.redirectedToLogin();
         }
 
-        const additionalData = await page.evaluate(async () => {
-            return new Promise((resolve) => {
-                let tries = 10;
+        const additionalData = await helpers.getAdditionalData(page);
 
-                const searchScripts = () => {
-                    const script = [...document.querySelectorAll('script')].find((s) => /__additionalDataLoaded\(/.test(s.innerHTML));
+        const pageData = this.getPageData({ entryData, additionalData });
 
-                    if (script) {
-                        try {
-                            return resolve(JSON.parse(script.innerHTML.split(/window\.__additionalDataLoaded\([^,]+?,/, 2)[1].slice(0, -2)));
-                        } catch (e) { }
-                    }
-
-                    if (tries-- > 0) {
-                        setTimeout(searchScripts, 100);
-                    } else {
-                        resolve({});
-                    }
-                };
-
-                setTimeout(searchScripts);
-            });
-        });
-
-        const itemSpec = this.getItemSpec({ entryData, additionalData });
-
-        const { pageType } = itemSpec;
-
-        itemSpec.label = `[${helpers.uppercaseFirstLetter(pageType)} ${itemSpec.name || itemSpec.tagName || request.url}]`;
+        const { pageType } = pageData;
 
         if (pageType === PAGE_TYPES.CHALLENGE) {
             this.challengePage(context);
@@ -270,7 +210,7 @@ class BaseScraper extends Apify.PuppeteerCrawler {
         const igData = {
             additionalData,
             entryData,
-            itemSpec,
+            pageData,
         };
 
         try {
@@ -348,17 +288,17 @@ class BaseScraper extends Apify.PuppeteerCrawler {
      * @param {consts.IGData} ig
      */
     async getTaggedPosts(context, ig) {
-        const { itemSpec } = ig;
+        const { pageData } = ig;
         const { page } = context;
 
-        if (!itemSpec.userId) {
+        if (!pageData.userId) {
             return undefined;
         }
 
         return helpers.singleQuery(
             taggedPostsQueryId,
             {
-                id: itemSpec.userId,
+                id: pageData.userId,
                 first: 50,
             },
             (data) => data?.user?.edge_user_to_photos_of_you?.edges?.map(({ node }) => formatSinglePost(node)),
@@ -374,23 +314,61 @@ class BaseScraper extends Apify.PuppeteerCrawler {
      */
     setDebugData(context, ig, data) {
         const { request } = context;
-        const { itemSpec } = ig;
+        const { pageData } = ig;
 
         return {
             '#debug': {
-                ...Apify.utils.createRequestDebugInfo(request),
-                ...itemSpec,
-                input: this.options.input,
+                request: Apify.utils.createRequestDebugInfo(request),
+                ...pageData,
             },
             ...data,
         };
     }
 
     /**
+     * @param {consts.PuppeteerContext} context
+     * @param {consts.IGData} ig
+     */
+    async formatPostOutput(context, ig) {
+        const likedBy = await this.getPostLikes(context, ig);
+        const { entryData, additionalData } = ig;
+
+        const data = entryData?.PostPage?.[0]?.graphql?.shortcode_media
+            ?? additionalData?.graphql?.shortcode_media;
+
+        return {
+            ...formatSinglePost(data),
+            captionIsEdited: typeof data.caption_is_edited !== 'undefined' ? data.caption_is_edited : null,
+            hasRankedComments: data.has_ranked_comments,
+            commentsDisabled: data.comments_disabled,
+            displayResourceUrls: data.edge_sidecar_to_children ? formatDisplayResources(data.edge_sidecar_to_children.edges) : null,
+            childPosts: data.edge_sidecar_to_children ? data.edge_sidecar_to_children.edges.map((child) => formatSinglePost(child.node)) : null,
+            locationSlug: data.location ? data.location.slug : null,
+            isAdvertisement: typeof data.is_ad !== 'undefined' ? data.is_ad : null,
+            taggedUsers: data.edge_media_to_tagged_user ? data.edge_media_to_tagged_user.edges.map((edge) => edge.node.user.username) : [],
+            likedBy,
+        };
+    }
+
+    /**
      * @param {consts.IGData} data
      */
-    getItemSpec(data) {
-        const { entryData } = data;
+    getPageData(data) {
+        const { entryData, additionalData } = data;
+
+        if (entryData.PostPage) {
+            const itemData = entryData.PostPage?.[0]?.graphql?.shortcode_media
+                ?? additionalData?.graphql?.shortcode_media;
+
+            return {
+                pageType: PAGE_TYPES.POST,
+                id: itemData.shortcode,
+                postCommentsDisabled: itemData.comments_disabled,
+                postIsVideo: itemData.is_video,
+                postVideoViewCount: itemData.video_view_count || 0,
+                postVideoDurationSecs: itemData.video_duration || 0,
+            };
+        }
 
         if (entryData.Challenge) {
             return {
@@ -423,7 +401,7 @@ class BaseScraper extends Apify.PuppeteerCrawler {
     async getProfileFollowedBy(context, ig) {
         const { page } = context;
         const { likedByLimit } = this.options.input;
-        const { itemSpec } = ig;
+        const { pageData } = ig;
 
         if (!likedByLimit) return undefined;
 
@@ -455,7 +433,7 @@ class BaseScraper extends Apify.PuppeteerCrawler {
         };
 
         const variables = {
-            id: itemSpec.userId,
+            id: pageData.userId,
             include_reel: false,
             fetch_mutual: false,
         };
@@ -480,7 +458,7 @@ class BaseScraper extends Apify.PuppeteerCrawler {
         if (!likedByLimit || likedByLimit === 0) return [];
 
         const { page } = context;
-        const { itemSpec } = ig;
+        const { pageData } = ig;
 
         log.info(`Loading users who liked the post (limit ${likedByLimit} items).`);
 
@@ -508,7 +486,7 @@ class BaseScraper extends Apify.PuppeteerCrawler {
         };
 
         const variables = {
-            shortcode: itemSpec.id,
+            shortcode: pageData.id,
             include_reel: false,
         };
 
@@ -529,7 +507,7 @@ class BaseScraper extends Apify.PuppeteerCrawler {
     async getProfileFollowing(context, ig) {
         const { followingLimit } = this.options.input;
         const { page } = context;
-        const { itemSpec } = ig;
+        const { pageData } = ig;
 
         log.info(`Loading users current profile follows (limit ${followingLimit} items).`);
 
@@ -557,7 +535,7 @@ class BaseScraper extends Apify.PuppeteerCrawler {
         };
 
         const variables = {
-            id: itemSpec.userId,
+            id: pageData.userId,
             include_reel: false,
             fetch_mutual: false,
         };
@@ -588,12 +566,17 @@ class BaseScraper extends Apify.PuppeteerCrawler {
         };
         const transformedPosts = [];
         for (let i = 0; i < posts.length; i++) {
+            if (posts[i]?.owner?.username) {
+                // eslint-disable-next-line no-continue
+                continue;
+            }
+
             log.info(`Owner details - Expanding owner details of post ${i + 1}/${posts.length}`);
 
-            const ownerId = posts[i].ownerId
-                ?? posts[i]?.['#debug']?.postOwnerId;
+            const { ownerId } = posts[i];
 
             if (!ownerId) {
+                log.debug('No ownerId', posts[i]);
                 transformedPosts.push(posts[i]);
                 // eslint-disable-next-line no-continue
                 continue;
@@ -612,7 +595,7 @@ class BaseScraper extends Apify.PuppeteerCrawler {
             try {
                 const owner = await helpers.singleQuery(
                     postQueryId,
-                    { shortcode: posts[i]['#debug'].shortcode, ...defaultVariables },
+                    { shortcode: posts[i].shortCode, ...defaultVariables },
                     transformFunction,
                     page,
                     'Owner details',
@@ -638,6 +621,10 @@ class BaseScraper extends Apify.PuppeteerCrawler {
     initScrollingState(id) {
         const { scrollingState } = this;
 
+        if (!id) {
+            throw new Error('Missing id');
+        }
+
         if (!scrollingState[id]) {
             /** @type {consts.Options['scrollingState']['']} */
             const newState = {
@@ -662,11 +649,13 @@ class BaseScraper extends Apify.PuppeteerCrawler {
     async filterPushedItemsAndUpdateState(items, id, parsingFn, outputFn) {
         const { minMaxDate, input: { resultsLimit = 0 } } = this.options;
 
+        const state = this.initScrollingState(id);
+
         if (!resultsLimit || !items?.length) {
             return;
         }
 
-        const state = this.initScrollingState(id);
+        state.allDuplicates = false;
 
         const currentCount = () => Object.keys(state.ids).length;
         const parsedItems = parsingFn(items, currentCount());
@@ -683,13 +672,13 @@ class BaseScraper extends Apify.PuppeteerCrawler {
                 break;
             }
 
-            if (minMaxDate.compare(item.timestamp)) {
-                if (!state.ids[item.id]) {
+            if ((!minMaxDate?.maxDate && !minMaxDate?.minDate) || minMaxDate.compare(item.timestamp)) {
+                if (item.id && !state.ids[item.id]) {
                     await outputFn(item);
                     itemsPushed++;
                     state.ids[item.id] = true;
                 } else {
-                    // Apify.utils.log.debug(`Item: ${item.id} was already pushed, skipping...`);
+                    throw new Error(`Missing item id`);
                 }
             }
         }
@@ -700,11 +689,7 @@ class BaseScraper extends Apify.PuppeteerCrawler {
         }
 
         // We have to tell the state if we are going though duplicates so it knows it should still continue scrolling
-        if (itemsPushed === 0) {
-            state.allDuplicates = true;
-        } else {
-            state.allDuplicates = false;
-        }
+        state.allDuplicates = itemsPushed === 0;
     }
 
     /**
@@ -721,8 +706,7 @@ class BaseScraper extends Apify.PuppeteerCrawler {
 
         const data = entryData.ProfilePage[0].graphql.user;
 
-        return {
-            ...this.getDebugData(context, ig),
+        const result = {
             id: data.id,
             username: data.username,
             fullName: data.full_name,
@@ -750,6 +734,8 @@ class BaseScraper extends Apify.PuppeteerCrawler {
             taggedPosts,
             hasPublicStory: data.has_public_story,
         };
+
+        return result;
     }
 
     /**
@@ -778,14 +764,14 @@ class BaseScraper extends Apify.PuppeteerCrawler {
      */
     async finiteScroll(context, ig, type) {
         const { page } = context;
-        const { itemSpec } = ig;
+        const { pageData } = ig;
         const { input: { resultsLimit = 0 } } = this.options;
+
+        const state = this.initScrollingState(pageData.id);
 
         if (!resultsLimit) {
             return false;
         }
-
-        const state = this.initScrollingState(itemSpec.id);
 
         try {
             if (page.isClosed()) {
@@ -798,7 +784,6 @@ class BaseScraper extends Apify.PuppeteerCrawler {
 
         const oldItemCount = Object.keys(state.ids).length;
 
-        // console.log('Starting load more fn')
         await page.keyboard.press('PageUp');
 
         const selectors = {
@@ -897,12 +882,9 @@ class BaseScraper extends Apify.PuppeteerCrawler {
             return true;
         }
 
-        if (state.allDuplicates) {
-            log.debug('all duplicates, its scrolling again');
-            return true;
-        }
+        log.debug(`current state`, state);
 
-        return true;
+        return state.allDuplicates;
     }
 
     /**
@@ -961,7 +943,7 @@ class BaseScraper extends Apify.PuppeteerCrawler {
      * @param {consts.IGData} ig
      */
     async getOutputFromEntryData(context, ig) {
-        const { pageType } = ig.itemSpec;
+        const { pageType } = ig.pageData;
 
         switch (pageType) {
             case PAGE_TYPES.PLACE:
@@ -994,7 +976,7 @@ class BaseScraper extends Apify.PuppeteerCrawler {
         if (includeHasStories) output.hasPublicStory = hasPublicStories?.user?.has_public_story ?? false;
 
         await extendOutputFunction(output, {
-            ...context,
+            context,
             ig,
             label: 'details',
         });
@@ -1017,14 +999,14 @@ class BaseScraper extends Apify.PuppeteerCrawler {
 
     /**
      * @param {Array<Record<string, any>>} comments
-     * @param {Record<string, any>} itemSpec
+     * @param {Record<string, any>} pageData
      * @param {number} currentScrollingPosition
      */
-    parseCommentsForOutput(comments, itemSpec, currentScrollingPosition) {
+    parseCommentsForOutput(comments, pageData, currentScrollingPosition) {
         return comments.map((item, index) => {
             return {
                 id: item.node.id,
-                postId: itemSpec.id,
+                postId: pageData.id,
                 text: item.node.text,
                 position: index + currentScrollingPosition + 1,
                 timestamp: new Date(parseInt(item.node.created_at, 10) * 1000).toISOString(),
@@ -1070,21 +1052,21 @@ class BaseScraper extends Apify.PuppeteerCrawler {
 
     /**
      * @param {any[]} posts
-     * @param {any} itemSpec
+     * @param {any} pageData
      * @param {number} currentScrollingPosition
      */
-    parsePostsForOutput(posts, itemSpec, currentScrollingPosition) {
+    parsePostsForOutput(posts, pageData, currentScrollingPosition) {
         return posts.map((item, index) => {
             const post = formatSinglePost(item.node);
 
             return {
-                queryTag: itemSpec.tagName,
-                queryUsername: itemSpec.userUsername,
-                queryLocation: itemSpec.locationName,
+                queryTag: pageData.tagName,
+                queryUsername: pageData.userUsername,
+                queryLocation: pageData.locationName,
                 position: currentScrollingPosition + 1 + index,
                 ...post,
-                locationId: post.locationId ?? itemSpec.locationId ?? null,
-                locationName: post.locationName ?? itemSpec.locationName ?? null,
+                locationId: post.locationId ?? pageData.locationId ?? null,
+                locationName: post.locationName ?? pageData.locationName ?? null,
             };
         });
     }

@@ -1,4 +1,5 @@
 const Apify = require('apify');
+// eslint-disable-next-line no-unused-vars
 const Puppeteer = require('puppeteer');
 const delay = require('delayable-idle-abort-promise').default;
 
@@ -90,11 +91,11 @@ class LoginScraper extends BaseScraper {
     async scrapeComments(context, ig) {
         await super.scrapeComments(context, ig);
 
-        const { itemSpec } = ig;
+        const { pageData } = ig;
         const { extendOutputFunction, extendScraperFunction } = this.options;
         const { page, request } = context;
 
-        const state = this.initScrollingState(itemSpec.id);
+        const state = this.initScrollingState(pageData.id);
 
         const control = delay(300000);
         const defer = helpers.deferred();
@@ -106,15 +107,15 @@ class LoginScraper extends BaseScraper {
         const pushComments = (timeline, response = undefined) => {
             return this.filterPushedItemsAndUpdateState(
                 timeline.comments,
-                itemSpec.id,
+                pageData.id,
                 (items, position) => {
-                    log.info(`${itemSpec.label} ${items.length} comments loaded, ${Object.keys(state.ids).length}/${timeline.commentsCount} comments scraped`);
+                    log.info(`${this.logLabel(context, ig)} ${items.length} comments loaded, ${Object.keys(state.ids).length}/${timeline.commentsCount} comments scraped`);
 
-                    return this.parseCommentsForOutput(items, itemSpec, position);
+                    return this.parseCommentsForOutput(items, pageData, position);
                 },
                 async (item) => {
                     await extendOutputFunction(item, {
-                        ...context,
+                        context,
                         response,
                         ig,
                         label: 'comment',
@@ -213,22 +214,20 @@ class LoginScraper extends BaseScraper {
 
     /**
      * @param {Array<Record<string, any>>} comments
-     * @param {Record<string, any>} itemSpec
+     * @param {Record<string, any>} pageData
      * @param {number} currentScrollingPosition
      */
-    parseCommentsForOutput(comments = [], itemSpec, currentScrollingPosition) {
+    parseCommentsForOutput(comments = [], pageData, currentScrollingPosition) {
         return comments.map((item, index) => {
             return {
-                id: item.pk,
-                postId: itemSpec.id,
+                id: `${item.pk}`,
+                postId: `${pageData.id}`,
                 text: item.text,
                 position: index + currentScrollingPosition + 1,
                 timestamp: new Date(parseInt(item.created_at_utc, 10) * 1000).toISOString(),
-                ownerId: item.user_id ?? null,
                 ownerIsVerified: item?.user?.is_verified ?? null,
-                ownerUsername: item?.user?.username ?? null,
                 ownerProfilePicUrl: item?.owner?.profile_pic_url ?? null,
-                owner: this.formatEndpointUser(item.user),
+                ...this.formatEndpointUser(item.user),
             };
         });
     }
@@ -242,7 +241,7 @@ class LoginScraper extends BaseScraper {
      */
     getPostsFromEntryData(context, ig) {
         const { request } = context;
-        const { entryData, itemSpec: { pageType } } = ig;
+        const { entryData, pageData: { pageType } } = ig;
 
         switch (pageType) {
             case PAGE_TYPES.PLACE: {
@@ -274,13 +273,13 @@ class LoginScraper extends BaseScraper {
      * @param {consts.IGData} ig
      */
     formatPlaceOutput(context, ig) {
-        const { entryData, itemSpec: { pageType } } = ig;
+        const { entryData, pageData: { pageType } } = ig;
 
         const base = entryData.LocationsPage[0].native_location_data;
         const data = base.location_info;
 
         return {
-            id: data.id,
+            id: `${data.pk}`,
             name: data.name,
             lat: data.lat,
             lng: data.lng,
@@ -304,19 +303,19 @@ class LoginScraper extends BaseScraper {
      * @param {consts.IGData} ig
      */
     formatHashtagOutput(context, ig) {
-        const { entryData, itemSpec: { pageType } } = ig;
+        const { entryData, pageData: { pageType } } = ig;
 
         const { data } = entryData.TagPage[0];
 
         return {
-            id: data.id,
+            id: `${data.pk}`,
             name: data.name,
             public: data.has_public_page,
             topPostsOnly: data.is_top_media_only,
             profilePicUrl: data.profile_pic_url,
             postsCount: data.media_count,
-            topPosts: this.getPostsFromEndpoint(pageType, data.top).posts,
-            latestPosts: this.getPostsFromEndpoint(pageType, data.recent).posts,
+            topPosts: this.getPostsFromEndpoint(pageType, data.top).posts.map((post) => this.formatPostForOutput(post)),
+            latestPosts: this.getPostsFromEndpoint(pageType, data.recent).posts.map((post) => this.formatPostForOutput(post)),
         };
     }
 
@@ -328,20 +327,24 @@ class LoginScraper extends BaseScraper {
         const likedBy = await this.getPostLikes(context, ig);
         const { additionalData } = ig;
 
-        const data = additionalData.items[0];
+        const data = additionalData.items?.[0];
 
-        return {
-            ...this.formatPostOuput(data),
-            captionIsEdited: typeof data.caption_is_edited !== 'undefined' ? data.caption_is_edited : null,
-            hasRankedComments: data.has_ranked_comments,
-            commentsDisabled: data.comments_disabled,
-            displayResourceUrls: this.getImages(data.carousel_media),
-            childPosts: null,
-            locationSlug: data?.location?.slug ?? null,
-            isAdvertisement: typeof data.is_ad !== 'undefined' ? data.is_ad : null,
-            taggedUsers: [],
-            likedBy,
-        };
+        if (data) {
+            return {
+                ...this.formatPostForOutput(data),
+                captionIsEdited: typeof data.caption_is_edited !== 'undefined' ? data.caption_is_edited : null,
+                hasRankedComments: data.has_ranked_comments,
+                commentsDisabled: data.comments_disabled,
+                displayResourceUrls: this.getImages(data.carousel_media),
+                childPosts: null,
+                locationSlug: data?.location?.slug ?? null,
+                isAdvertisement: typeof data.is_ad !== 'undefined' ? data.is_ad : null,
+                taggedUsers: [],
+                likedBy,
+            };
+        }
+
+        return super.formatPostOutput(context, ig);
     }
 
     /**
@@ -349,7 +352,7 @@ class LoginScraper extends BaseScraper {
      * @param {consts.IGData} ig
      */
     async getOutputFromEntryData(context, ig) {
-        const { pageType } = ig.itemSpec;
+        const { pageType } = ig.pageData;
 
         switch (pageType) {
             case PAGE_TYPES.PLACE:
@@ -371,7 +374,7 @@ class LoginScraper extends BaseScraper {
      */
     async scrapePost(context, ig) {
         const { request } = context;
-        const { additionalData, itemSpec } = ig;
+        const { additionalData, pageData } = ig;
         const { expandOwners } = this.options.input;
 
         const item = additionalData.items[0];
@@ -387,11 +390,11 @@ class LoginScraper extends BaseScraper {
             // ownerUsername: item.owner?.username ?? null,
         };
 
-        if (expandOwners && itemSpec.pageType !== PAGE_TYPES.PROFILE) {
+        if (expandOwners && pageData.pageType !== PAGE_TYPES.PROFILE) {
             [result] = await this.expandOwnerDetails(context, [result]);
         }
 
-        return this.setDebugData(context, ig, result);
+        return result;
     }
 
     /**
@@ -399,11 +402,16 @@ class LoginScraper extends BaseScraper {
      */
     formatEndpointUser(user) {
         return {
-            id: user?.pk ?? user?.id ?? null,
-            username: user?.username ?? null,
-            fullName: user?.full_name ?? null,
-            isPrivate: user?.is_private ?? null,
-            profilePicUrl: user?.profile_pic_url ?? null,
+            ownerFullName: user?.full_name ? user.full_name : null,
+            ownerUsername: user?.username ? user.username : null,
+            ownerId: user?.pk ? `${user.pk}` : null,
+            owner: {
+                id: user?.pk ? `${user.pk}` : null,
+                username: user?.username ?? null,
+                fullName: user?.full_name ?? null,
+                isPrivate: user?.is_private ?? null,
+                profilePicUrl: user?.profile_pic_url ?? null,
+            },
         };
     }
 
@@ -411,14 +419,15 @@ class LoginScraper extends BaseScraper {
      * @param {Record<string, any>} item
      * @param {any[]} [latestComments]
      */
-    formatPostOuput(item, latestComments = []) {
+    formatPostForOutput(item, latestComments = []) {
         const medias = item.carousel_media ?? [];
-        const caption = item.caption?.text ?? null;
+        const caption = item.caption?.text?.trim?.() ?? null;
         const postInfo = helpers.parseCaption(caption);
 
         return {
+            id: `${item.id}`,
             locationName: item.location?.name ?? null,
-            locationId: item.location?.pk ?? null,
+            locationId: item.location?.pk ? `${item.location.pk}` : null,
             locationLat: item.location?.lat ?? null,
             locationLng: item.location?.lat ?? null,
             type: item.media_type === 2 ? 'Video' : 'Image',
@@ -433,15 +442,15 @@ class LoginScraper extends BaseScraper {
             displayUrl: this.getDisplayUrl(medias),
             images: this.getImages(medias),
             videoUrl: item.video_url,
-            id: item.pk,
+            id: `${item.pk}`,
             firstComment: latestComments?.[0]?.text ?? '',
             alt: null,
             likesCount: item.like_count ?? null,
             videoViewCount: item.video_view_count,
             timestamp: item.caption?.created_at_utc
-                ? new Date(item.caption?.created_at_utc * 1000).toISOString()
+                ? new Date(item.caption.created_at_utc * 1000).toISOString()
                 : null,
-            owner: this.formatEndpointUser(item.user),
+            ...this.formatEndpointUser(item.user),
             productType: item.product_type,
             isSponsored: item.is_commercial,
             videoDuration: item.video_duration,
@@ -464,19 +473,19 @@ class LoginScraper extends BaseScraper {
 
     /**
      * @param {any[]} posts
-     * @param {any} itemSpec
+     * @param {any} pageData
      * @param {number} currentScrollingPosition
      */
-    parseEndpointPostsForOutput(posts, itemSpec, currentScrollingPosition) {
+    parseEndpointPostsForOutput(posts, pageData, currentScrollingPosition) {
         return posts.map((item, index) => {
-            const latestComments = this.parseCommentsForOutput(item.preview_comments, itemSpec, currentScrollingPosition);
+            const latestComments = this.parseCommentsForOutput(item.preview_comments, pageData, currentScrollingPosition);
 
             return {
-                queryTag: itemSpec.tagName,
-                queryUsername: itemSpec.userUsername,
-                queryLocation: itemSpec.locationName,
+                queryTag: pageData.tagName,
+                queryUsername: pageData.userUsername,
+                queryLocation: pageData.locationName,
                 position: currentScrollingPosition + 1 + index,
-                ...this.formatPostOuput(item, latestComments),
+                ...this.formatPostForOutput(item, latestComments),
             };
         });
     }
@@ -489,10 +498,12 @@ class LoginScraper extends BaseScraper {
     async scrapePosts(context, ig) {
         const { page, request } = context;
         const { extendOutputFunction, extendScraperFunction } = this.options;
-        const { itemSpec } = ig;
 
-        const { pageType } = itemSpec;
-        const state = this.initScrollingState(itemSpec.id);
+        const { pageData } = ig;
+
+        const { pageType } = pageData;
+
+        const state = this.initScrollingState(pageData.id);
 
         /**
          * @param {{ posts: any[], postsCount: number }} timeline
@@ -502,15 +513,15 @@ class LoginScraper extends BaseScraper {
         const pushPosts = (timeline, outputFn, response) => {
             return this.filterPushedItemsAndUpdateState(
                 timeline.posts,
-                itemSpec.id,
+                pageData.id,
                 (items, position) => {
-                    log.info(`${itemSpec.label} ${items.length} posts loaded, ${Object.keys(state.ids).length}/${timeline.postsCount} posts scraped`);
+                    log.info(`${this.logLabel(context, ig)} ${items.length} posts loaded, ${Object.keys(state.ids).length}/${timeline.postsCount} posts scraped`);
 
                     return outputFn(items, position);
                 },
                 async (item) => {
                     await extendOutputFunction(item, {
-                        ...context,
+                        context,
                         response,
                         ig,
                         label: 'post',
@@ -519,7 +530,14 @@ class LoginScraper extends BaseScraper {
             );
         };
 
-        const checkedVariable = helpers.getCheckedVariable(pageType);
+        const checkedVariable = (() => {
+            try {
+                return helpers.getCheckedVariable(pageType);
+            } catch (e) {
+                request.noRetry = true;
+                throw e;
+            }
+        })();
 
         page.on('response', async (response) => {
             try {
@@ -550,7 +568,7 @@ class LoginScraper extends BaseScraper {
 
                     return await pushPosts(
                         timeline,
-                        (items, position) => this.parsePostsForOutput(items, itemSpec, position),
+                        (items, position) => this.parsePostsForOutput(items, pageData, position),
                         response,
                     );
                 }
@@ -574,7 +592,7 @@ class LoginScraper extends BaseScraper {
 
                     await pushPosts(
                         timeline,
-                        (items, position) => this.parseEndpointPostsForOutput(items, itemSpec, position),
+                        (items, position) => this.parseEndpointPostsForOutput(items, pageData, position),
                         response,
                     );
                 }
@@ -616,8 +634,8 @@ class LoginScraper extends BaseScraper {
                 timeline,
                 (items, position) => {
                     return pageType === PAGE_TYPES.PROFILE
-                        ? this.parsePostsForOutput(items, itemSpec, position)
-                        : this.parseEndpointPostsForOutput(items, itemSpec, position);
+                        ? this.parsePostsForOutput(items, pageData, position)
+                        : this.parseEndpointPostsForOutput(items, pageData, position);
                 },
             );
         }
@@ -678,7 +696,7 @@ class LoginScraper extends BaseScraper {
         if (includeHasStories) output.hasPublicStory = hasPublicStories?.user?.has_public_story ?? false;
 
         await extendOutputFunction(output, {
-            ...context,
+            context,
             ig,
             label: 'details',
         });
@@ -751,10 +769,9 @@ class LoginScraper extends BaseScraper {
             log.info(`Scraped ${stories.length}/${timeline.storiesCount} stories from ${request.url}`);
 
             await extendOutputFunction(stories.slice(0, resultsLimit), {
-                ...context,
+                context,
                 ig,
                 label: 'stories',
-                page,
             });
         } else {
             throw errors.storiesNotLoaded(reelId);
@@ -806,7 +823,7 @@ class LoginScraper extends BaseScraper {
     /**
      * @param {consts.IGData} ig
      */
-    getItemSpec(ig) {
+    getPageData(ig) {
         const { entryData, additionalData } = ig;
 
         if (entryData.LocationsPage) {
@@ -847,25 +864,34 @@ class LoginScraper extends BaseScraper {
         }
 
         if (entryData.PostPage) {
-            const itemData = additionalData.items[0];
+            const itemData = additionalData.items?.[0];
 
-            return {
-                pageType: PAGE_TYPES.POST,
-                id: itemData.code,
-                postCommentsDisabled: itemData.comments_disabled,
-                postIsVideo: itemData.is_video,
-                postVideoViewCount: itemData.video_view_count || 0,
-                postVideoDurationSecs: itemData.video_duration || 0,
-            };
+            if (itemData) {
+                return {
+                    pageType: PAGE_TYPES.POST,
+                    id: itemData.code,
+                    postCommentsDisabled: itemData.comments_disabled,
+                    postIsVideo: itemData.is_video,
+                    postVideoViewCount: itemData.video_view_count || 0,
+                    postVideoDurationSecs: itemData.video_duration || 0,
+                };
+            }
+
+            return super.getPageData(ig);
         }
 
         if (entryData.StoriesPage) {
+            const itemData = entryData.StoriesPage?.[0]?.user;
+
             return {
+                id: itemData?.id,
+                userId: itemData?.id,
+                userUsername: itemData?.username,
                 pageType: PAGE_TYPES.STORY,
             };
         }
 
-        return super.getItemSpec(ig);
+        return super.getPageData(ig);
     }
 
     async run() {

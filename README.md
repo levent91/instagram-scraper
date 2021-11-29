@@ -12,7 +12,7 @@ The Instagram data scraper supports the following features:
 - Scrape likes - you can scrape likes from any post (if logged in)
 
 ## Why scrape Instagram?
-Instagram has about 1 billion monthly active users and is especially popular with younger users, a demographic that can otherwise be difficult for brands to reach. With so many active users, you can imagine that there is a lot of useful data on the site. 
+Instagram has about 1 billion monthly active users and is especially popular with younger users, a demographic that can otherwise be difficult for brands to reach. With so many active users, you can imagine that there is a lot of useful data on the site.
 
 So what could you do with that data? Here are some ideas:
 - Scrape hashtags and likes to see what's becoming popular. Maybe you can get involved early or create a niche product to take advantage of short-term trends.
@@ -104,29 +104,6 @@ To log in using cookies, you can use a Chrome browser extension such as [EditThi
 
 **If you log out of the Instagram account that is connected to the cookies, it will invalidate them and your solution will stop working.**
 
-You can also provide your username and password as input and set the "What to scrape from each page" to be "Cookies".
-
-You'll need to provide a 2FA code (SMS or email) to continue with the login by going to the "Live View" tab of your run when instructed to do so:
-
-```
- _____  _
-|  __ \| |
-| |__) | | ___  __ _ ___  ___    ___  _ __   ___ _ __
-|  ___/| |/ _ \/ _` / __|/ _ \  / _ \| '_ \ / _ \ '_ \
-| |    | |  __/ (_| \__ \  __/ | (_) | |_) |  __/ | | |
-|_|    |_|\___|\__,_|___/\___|  \___/| .__/ \___|_| |_|
-                                     | |
-                                     |_|
-
- _ _                   _
-| (_)                 (_)
-| |___   _____  __   ___  _____      __
-| | \ \ / / _ \ \ \ / / |/ _ \ \ /\ / /
-| | |\ V /  __/  \ V /| |  __/\ V  V /
-|_|_| \_/ \___|   \_/ |_|\___| \_/\_/
-```
-
-You'll also need to allow the connection in your Instagram account security settings.
 
 ## Instagram output format
 The actor stores its results in a dataset. Each item is a separate item in the dataset.

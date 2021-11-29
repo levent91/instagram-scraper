@@ -69,11 +69,12 @@ const formatSinglePost = (node) => {
     };
     const likes = node.edge_liked_by || node.edge_media_preview_like;
     const caption = node?.edge_media_to_caption?.edges?.length
-        ? node.edge_media_to_caption.edges.reduce((out, { node: { text } }) => `${out}\n${text}`, '')
+        ? node.edge_media_to_caption.edges.reduce((out, { node: { text } }) => ([...out, text]), []).join('\n')
         : '';
     const { hashtags, mentions } = parseCaption(caption);
 
     return {
+        id: node.id,
         // eslint-disable-next-line no-nested-ternary
         type: node.__typename ? node.__typename.replace('Graph', '') : (node.is_video ? 'Video' : 'Image'),
         shortCode: node.shortcode,
@@ -83,7 +84,7 @@ const formatSinglePost = (node) => {
         url: `https://www.instagram.com/p/${node.shortcode}`,
         commentsCount: comments?.count ?? 0,
         latestComments: comments?.edges?.length ? comments.edges.map((edge) => ({
-            ownerUsername: edge.node.owner ? edge.node.owner.username : '',
+            ownerUsername: edge?.node?.owner?.username ?? '',
             text: edge.node.text,
         })).reverse() : [],
         dimensionsHeight: node.dimensions.height,
@@ -91,7 +92,6 @@ const formatSinglePost = (node) => {
         displayUrl: node.display_url,
         images: sidecarImages(node),
         videoUrl: node.video_url,
-        id: node.id,
         firstComment: comments?.edges?.[0]?.node?.text ?? '',
         alt: node.accessibility_caption,
         likesCount: likes?.count ?? null,
