@@ -110,14 +110,16 @@ class LoginScraper extends PublicScraper {
          * @param {{ comments: any[], commentsCount: number }} timeline
          * @param {Puppeteer.HTTPResponse} [response]
          */
-        const pushComments = (timeline, response = undefined) => {
+        const pushComments = (timeline, response = undefined, isGraphQL = false) => {
             return this.filterPushedItemsAndUpdateState(
                 timeline.comments,
                 pageData.id,
                 (items, position) => {
                     log.info(`${this.logLabel(context, ig)} ${items.length} comments loaded, ${Object.keys(state.ids).length}/${timeline.commentsCount} comments scraped`);
 
-                    return this.parseCommentsForOutput(items, pageData, position);
+                    return isGraphQL
+                        ? super.parseCommentsForOutput(items, pageData, position)
+                        : this.parseCommentsForOutput(items, pageData, position);
                 },
                 async (item) => {
                     await extendOutputFunction(item, {
@@ -130,37 +132,80 @@ class LoginScraper extends PublicScraper {
             );
         };
 
+        const checkedVariable = helpers.getCheckedVariable(pageData.pageType);
+
         page.on('response', async (response) => {
             try {
                 const responseUrl = response.url();
 
-                if (response.request().method() === 'GET' && responseUrl.startsWith(V1_ENDPOINT) && responseUrl.includes('/comments/')) {
-                    if (!this.isValidResponse(response)) {
-                        return defer.reject(new Error('Login'));
-                    }
-
-                    // If it fails here, it means that the error was caught in the finite scroll anyway so we just don't do anything
-                    const data = await (async () => {
-                        try {
-                            return await response.json();
-                        } catch (e) {
-                            log.debug(e.message);
+                if (response.request().method() === 'GET') {
+                    if (responseUrl.startsWith(GRAPHQL_ENDPOINT)) {
+                        if (!this.isValidResponse(response)) {
+                            return defer.reject(new Error('Login'));
                         }
-                    })();
 
-                    if (!data) {
-                        return;
+                        // Skip queries for other stuff then posts
+                        if (!responseUrl.includes(checkedVariable) || !responseUrl.includes('%22first%22')) {
+                            log.debug('Skipping', { responseUrl, checkedVariable });
+                            return;
+                        }
+
+                        // If it fails here, it means that the error was caught in the finite scroll anyway so we just don't do anything
+                        const data = await (async () => {
+                            try {
+                                return await response.json();
+                            } catch (e) {
+                                log.debug(e.message);
+                            }
+                        })();
+
+                        if (!data) {
+                            return;
+                        }
+
+                        control.postpone();
+
+                        const timeline = super.getCommentsFromGraphQL(data.data);
+
+                        if (state.hasNextPage && !timeline.hasNextPage) {
+                            log.debug('no hasNextPage from graphql');
+                            state.hasNextPage = false;
+                        }
+
+                        await pushComments(timeline, response, true);
                     }
 
-                    control.postpone();
+                    if (responseUrl.startsWith(V1_ENDPOINT) && responseUrl.includes('/comments/')) {
+                        if (!this.isValidResponse(response)) {
+                            return defer.reject(new Error('Login'));
+                        }
 
-                    const timeline = this.getCommentsFromGraphQL(data);
+                        // If it fails here, it means that the error was caught in the finite scroll anyway so we just don't do anything
+                        const data = await (async () => {
+                            try {
+                                return await response.json();
+                            } catch (e) {
+                                log.debug(e.message);
+                            }
+                        })();
 
-                    if (state.hasNextPage && !timeline.hasNextPage) {
-                        state.hasNextPage = false;
+                        if (!data) {
+                            return;
+                        }
+
+                        if (data?.comments?.length) {
+                            control.postpone();
+
+                            const timeline = this.getCommentsFromGraphQL(data);
+
+                            if (state.hasNextPage && !timeline.hasNextPage) {
+                                log.debug('no hasNextPage');
+                                state.hasNextPage = false;
+                            }
+
+                            await pushComments(timeline, response);
+                        }
                     }
-
-                    await pushComments(timeline, response);
                 }
             } catch (e) {
                 // throwing here would be the death of the run

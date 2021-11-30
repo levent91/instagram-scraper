@@ -124,36 +124,66 @@ class PublicScraper extends BaseScraper {
     }
 
     /**
+     * Takes type of page and data loaded through GraphQL and outputs
+     * correct list of comments.
+     * @param {Record<string, any>} data GraphQL data
+     */
+    getCommentsFromGraphQL(data) {
+        const { shortcode_media } = data;
+
+        const timeline = shortcode_media?.edge_media_to_parent_comment;
+
+        /** @type {any[]} */
+        const commentItems = timeline?.edges?.reverse() ?? [];
+        /** @type {number | null} */
+        const commentsCount = timeline?.count ?? null;
+        /** @type {boolean} */
+        const hasNextPage = timeline?.page_info?.has_next_page ?? false;
+
+        return {
+            comments: commentItems,
+            hasNextPage,
+            commentsCount,
+        };
+    }
+
+    /**
      * @param {consts.PuppeteerContext} context
      * @param {consts.IGData} ig
      */
     async scrapeComments(context, ig) {
+        await super.scrapeComments(context, ig);
+
         const { extendOutputFunction } = this.options;
         const { page } = context;
         const { entryData, pageData } = ig;
 
-        const timeline = this.getCommentsFromGraphQL(entryData.PostPage[0].graphql);
-        const state = this.initScrollingState(pageData.id);
+        const postData = entryData.PostPage?.[0]?.graphql;
 
-        // Public comments are preloaded on page load and can't be iterated
-        await this.filterPushedItemsAndUpdateState(
-            timeline.comments,
-            pageData.id,
-            (comments, position) => {
-                const result = this.parseCommentsForOutput(comments, pageData, position);
+        if (postData?.shortcode_media) {
+            const timeline = this.getCommentsFromGraphQL(postData);
+            const state = this.initScrollingState(pageData.id);
 
-                log.info(`${this.logLabel(context, ig)} ${comments.length} comments loaded, ${Object.keys(state.ids).length}/${timeline.commentsCount} comments scraped`);
+            // Public comments are preloaded on page load and can't be iterated
+            await this.filterPushedItemsAndUpdateState(
+                timeline.comments,
+                pageData.id,
+                (comments, position) => {
+                    const result = this.parseCommentsForOutput(comments, pageData, position);
 
-                return result;
-            },
-            async (comment) => {
-                await extendOutputFunction(comment, {
-                    context,
-                    ig,
-                    label: 'comment',
-                });
-            },
-        );
+                    log.info(`${this.logLabel(context, ig)} ${comments.length} comments loaded, ${Object.keys(state.ids).length}/${timeline.commentsCount} comments scraped`);
+
+                    return result;
+                },
+                async (comment) => {
+                    await extendOutputFunction(comment, {
+                        context,
+                        ig,
+                        label: 'comment',
+                    });
+                },
+            );
+        }
     }
 
     /**
@@ -301,7 +331,7 @@ class PublicScraper extends BaseScraper {
                     }
 
                     // Skip queries for other stuff then posts
-                    if (!responseUrl.includes(checkedVariable) && !responseUrl.includes('%22first%22')) {
+                    if (!responseUrl.includes(checkedVariable) || !responseUrl.includes('%22first%22')) {
                         log.debug('Skipping', { responseUrl, checkedVariable });
                         return;
                     }
@@ -324,6 +354,7 @@ class PublicScraper extends BaseScraper {
                     const timeline = this.getPostsFromGraphQL(pageType, data.data);
 
                     if (state.hasNextPage && !timeline.hasNextPage) {
+                        log.debug('no more posts from graphql');
                         state.hasNextPage = false;
                     }
 

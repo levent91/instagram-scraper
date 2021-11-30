@@ -949,29 +949,6 @@ class BaseScraper extends Apify.PuppeteerCrawler {
         });
     }
 
-    /**
-     * Takes type of page and data loaded through GraphQL and outputs
-     * correct list of comments.
-     * @param {Record<string, any>} data GraphQL data
-     */
-    getCommentsFromGraphQL(data) {
-        const { shortcode_media } = data;
-
-        const timeline = shortcode_media && shortcode_media.edge_media_to_parent_comment;
-        /** @type {any[]} */
-        const commentItems = timeline ? timeline.edges.reverse() : [];
-        /** @type {number | null} */
-        const commentsCount = timeline ? timeline.count : null;
-        /** @type {boolean} */
-        const hasNextPage = timeline ? timeline.page_info.has_next_page : false;
-
-        return {
-            comments: commentItems,
-            hasNextPage,
-            commentsCount,
-        };
-    }
-
     async run() {
         const { extendScraperFunction, input } = this.options;
 
