@@ -8,7 +8,8 @@ const consts = require('./consts');
 const { PAGE_TYPES, GRAPHQL_ENDPOINT } = consts;
 const BaseScraper = require('./scraper-base');
 
-const { formatSinglePost } = require('./details');
+const { formatSinglePost, formatIGTVVideo, formatDisplayResources } = require('./details');
+
 const errors = require('./errors');
 const helpers = require('./helpers');
 
@@ -16,10 +17,56 @@ const { log } = Apify.utils;
 
 class PublicScraper extends BaseScraper {
     /**
+     * @param {consts.PuppeteerContext} context
+     * @param {consts.IGData} ig
+     */
+    async formatProfileOutput(context, ig) {
+        const { includeTaggedPosts } = this.options.input;
+        const following = await this.getProfileFollowing(context, ig);
+        const followedBy = await this.getProfileFollowedBy(context, ig);
+        const taggedPosts = includeTaggedPosts ? await this.getTaggedPosts(context, ig) : [];
+
+        const { entryData } = ig;
+
+        const data = entryData.ProfilePage[0].graphql.user;
+
+        const result = {
+            id: data.id,
+            username: data.username,
+            fullName: data.full_name,
+            biography: data.biography,
+            externalUrl: data.external_url,
+            externalUrlShimmed: data.external_url_linkshimmed,
+            followersCount: data.edge_followed_by.count,
+            followsCount: data.edge_follow.count,
+            hasChannel: data.has_channel,
+            highlightReelCount: data.highlight_reel_count,
+            isBusinessAccount: data.is_business_account,
+            joinedRecently: data.is_joined_recently,
+            businessCategoryName: data.business_category_name,
+            private: data.is_private,
+            verified: data.is_verified,
+            profilePicUrl: data.profile_pic_url,
+            profilePicUrlHD: data.profile_pic_url_hd,
+            facebookPage: data.connected_fb_page,
+            igtvVideoCount: data.edge_felix_video_timeline.count,
+            latestIgtvVideos: data.edge_felix_video_timeline ? data.edge_felix_video_timeline.edges.map(formatIGTVVideo) : [],
+            postsCount: data.edge_owner_to_timeline_media.count,
+            latestPosts: data.edge_owner_to_timeline_media ? data.edge_owner_to_timeline_media.edges.map((edge) => edge.node).map(formatSinglePost) : [],
+            following,
+            followedBy,
+            taggedPosts,
+            hasPublicStory: data.has_public_story,
+        };
+
+        return result;
+    }
+
+    /**
      * @param {consts.IGData} ig
      */
     getPageData(ig) {
-        const { entryData } = ig;
+        const { entryData, additionalData } = ig;
 
         if (entryData.LocationsPage) {
             const itemData = entryData.LocationsPage[0].graphql.location;
@@ -59,6 +106,20 @@ class PublicScraper extends BaseScraper {
             };
         }
 
+        if (entryData.PostPage) {
+            const itemData = entryData.PostPage?.[0]?.graphql?.shortcode_media
+                ?? additionalData?.graphql?.shortcode_media;
+
+            return {
+                pageType: PAGE_TYPES.POST,
+                id: itemData.shortcode,
+                postCommentsDisabled: itemData.comments_disabled,
+                postIsVideo: itemData.is_video,
+                postVideoViewCount: itemData.video_view_count || 0,
+                postVideoDurationSecs: itemData.video_duration || 0,
+            };
+        }
+
         return super.getPageData(ig);
     }
 
@@ -93,6 +154,75 @@ class PublicScraper extends BaseScraper {
                 });
             },
         );
+    }
+
+    /**
+     * @param {consts.PuppeteerContext} context
+     * @param {consts.IGData} ig
+     */
+    async formatPostOutput(context, ig) {
+        const likedBy = await this.getPostLikes(context, ig);
+        const { entryData, additionalData } = ig;
+
+        const data = entryData?.PostPage?.[0]?.graphql?.shortcode_media
+            ?? additionalData?.graphql?.shortcode_media;
+
+        return {
+            ...formatSinglePost(data),
+            captionIsEdited: typeof data.caption_is_edited !== 'undefined' ? data.caption_is_edited : null,
+            hasRankedComments: data.has_ranked_comments,
+            commentsDisabled: data.comments_disabled,
+            displayResourceUrls: data.edge_sidecar_to_children ? formatDisplayResources(data.edge_sidecar_to_children.edges) : null,
+            childPosts: data.edge_sidecar_to_children ? data.edge_sidecar_to_children.edges.map((child) => formatSinglePost(child.node)) : null,
+            locationSlug: data.location ? data.location.slug : null,
+            isAdvertisement: typeof data.is_ad !== 'undefined' ? data.is_ad : null,
+            taggedUsers: data.edge_media_to_tagged_user ? data.edge_media_to_tagged_user.edges.map((edge) => edge.node.user.username) : [],
+            likedBy,
+        };
+    }
+
+    /**
+     * @param {consts.PuppeteerContext} context
+     * @param {consts.IGData} ig
+     */
+    async scrapeDetails(context, ig) {
+        const { extendOutputFunction } = this.options;
+        const { includeHasStories } = this.options.input;
+
+        let hasPublicStories;
+
+        if (includeHasStories) hasPublicStories = await this.loadPublicStories(context, ig);
+
+        const output = await this.getOutputFromEntryData(context, ig);
+
+        if (includeHasStories) output.hasPublicStory = hasPublicStories?.user?.has_public_story ?? false;
+
+        await extendOutputFunction(output, {
+            context,
+            ig,
+            label: 'details',
+        });
+    }
+
+    /**
+     * @param {consts.PuppeteerContext} context
+     * @param {consts.IGData} ig
+     */
+    async getOutputFromEntryData(context, ig) {
+        const { pageType } = ig.pageData;
+
+        switch (pageType) {
+            case PAGE_TYPES.PLACE:
+                return this.formatPlaceOutput(context, ig);
+            case PAGE_TYPES.PROFILE:
+                return this.formatProfileOutput(context, ig);
+            case PAGE_TYPES.HASHTAG:
+                return this.formatHashtagOutput(context, ig);
+            case PAGE_TYPES.POST:
+                return this.formatPostOutput(context, ig);
+            default:
+                throw new Error('Not supported');
+        }
     }
 
     /**
@@ -219,7 +349,7 @@ class PublicScraper extends BaseScraper {
                 }
             } finally {
                 await extendScraperFunction(undefined, {
-                    ...context,
+                    context,
                     ig,
                     label: 'RESPONSE',
                     response,

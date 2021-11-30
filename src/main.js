@@ -38,7 +38,7 @@ Apify.main(async () => {
 
     if (usingLoginCookies) {
         maxConcurrency = cookiesPerConcurrency;
-        log.warning(`Cookies were used, setting maxConcurrency to ${maxConcurrency}. Count of available cookies: ${loginCookies.length}!`);
+        log.warning(`Cookies were used, setting maxConcurrency to ${maxConcurrency}. Count of available cookies: ${Array.isArray(loginCookies[0]) ? loginCookies.length : 1}!`);
     }
 
     const proxyConfiguration = await helpers.proxyConfiguration({

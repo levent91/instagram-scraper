@@ -3,7 +3,7 @@ const Apify = require('apify');
 const Puppeteer = require('puppeteer');
 const delay = require('delayable-idle-abort-promise').default;
 
-const BaseScraper = require('./scraper-base');
+const PublicScraper = require('./scraper-public');
 
 const helpers = require('./helpers');
 const { loginManager } = require('./login');
@@ -21,7 +21,7 @@ const {
 
 const { log } = Apify.utils;
 
-class LoginScraper extends BaseScraper {
+class LoginScraper extends PublicScraper {
     /**
      * @param {consts.Options} options
      */
@@ -66,6 +66,12 @@ class LoginScraper extends BaseScraper {
                 }
             }
         });
+
+        this.sessionPoolOptions.maxPoolSize = this.options.input.cookiesPerConcurrency || 1;
+        this.sessionPoolOptions.sessionOptions = {
+            maxErrorScore: 1000,
+            maxUsageCount: 99999999,
+        };
     }
 
     /**
@@ -176,7 +182,7 @@ class LoginScraper extends BaseScraper {
                 }
             } finally {
                 await extendScraperFunction(undefined, {
-                    ...context,
+                    context,
                     ig,
                     label: 'RESPONSE',
                     response,
@@ -616,7 +622,7 @@ class LoginScraper extends BaseScraper {
                 }
             } finally {
                 await extendScraperFunction(undefined, {
-                    ...context,
+                    context,
                     ig,
                     label: 'RESPONSE',
                     response,
@@ -903,6 +909,8 @@ class LoginScraper extends BaseScraper {
         if (!this.logins.loginCount()) {
             throw new Error('No login information found, aborting.');
         }
+
+        this.autoscaledPoolOptions.maxConcurrency = this.logins.loginCount();
 
         await super.run();
     }
