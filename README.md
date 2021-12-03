@@ -11,6 +11,16 @@ The Instagram data scraper supports the following features:
 - Scrape comments - you can scrape comments from any post
 - Scrape likes - you can scrape likes from any post (if logged in)
 
+## Just want to scrape Instagram hashtags, profiles, posts, or comments?
+Use our super fast and easy dedicated scrapers if you want to scrape specific Instagram data. Fewer settings to change and faster results. Just enter one or more Instagram usernames or URLs and click to scrape.
+
+- [Instagram Hashtag Scraper](https://apify.com/zuzka/instagram-hashtag-scraper)
+- [Instagram Profile Scraper](https://apify.com/zuzka/instagram-profile-scraper)
+- [Instagram Post Scraper](https://apify.com/zuzka/instagram-post-scraper)
+- [Instagram Comments Scraper](https://apify.com/zuzka/instagram-comment-scraper)
+
+Try them out or let us know if you need a [custom Instagram scraping solution](https://apify.com/custom-solutions).
+
 ## Why scrape Instagram?
 Instagram has about 1 billion monthly active users and is especially popular with younger users, a demographic that can otherwise be difficult for brands to reach. With so many active users, you can imagine that there is a lot of useful data on the site. 
 
