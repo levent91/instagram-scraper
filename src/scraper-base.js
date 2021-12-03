@@ -62,6 +62,8 @@ class BaseScraper extends Apify.PuppeteerCrawler {
             useSessionPool: true,
             postNavigationHooks: [async ({ page }) => {
                 if (!page.isClosed()) {
+                    await helpers.addLoopToPage(page);
+                    await memoryCache(page);
                     await page.bringToFront();
                 }
             }],
@@ -84,12 +86,8 @@ class BaseScraper extends Apify.PuppeteerCrawler {
                     extraUrlPatterns: ABORT_RESOURCE_URL_INCLUDES,
                 });
 
-                await helpers.addLoopToPage(page);
-
                 const { pageType } = request.userData;
                 log.info(`Opening page type: ${pageType} on ${request.url}`);
-
-                await memoryCache(page);
             }],
             maxRequestRetries: options.input.maxRequestRetries,
             browserPoolOptions: {
@@ -636,10 +634,12 @@ class BaseScraper extends Apify.PuppeteerCrawler {
             }
 
             if ((!minMaxDate?.maxDate && !minMaxDate?.minDate) || minMaxDate.compare(item.timestamp)) {
-                if (item.id && !state.ids[item.id]) {
-                    await outputFn(item);
-                    itemsPushed++;
-                    state.ids[item.id] = true;
+                if (item.id) {
+                    if (!state.ids[item.id]) {
+                        await outputFn(item);
+                        itemsPushed++;
+                        state.ids[item.id] = true;
+                    }
                 } else {
                     throw new Error(`Missing item id`);
                 }
@@ -690,16 +690,25 @@ class BaseScraper extends Apify.PuppeteerCrawler {
             return false;
         }
 
-        try {
-            if (page.isClosed()) {
-                return false;
+        // this can happen at any time between lenghty await calls
+        const shouldAbort = () => {
+            try {
+                if (page.isClosed()) {
+                    return true;
+                }
+            } catch (e) {
+                // Target closed error
+                return true;
             }
-        } catch (e) {
-            // Target closed error
-            return false;
-        }
 
-        const oldItemCount = Object.keys(state.ids).length;
+            return false;
+        };
+
+        const scrappedCount = () => {
+            return Object.keys(state.ids).length;
+        };
+
+        const oldItemCount = scrappedCount();
 
         await page.keyboard.press('PageUp');
 
@@ -714,6 +723,10 @@ class BaseScraper extends Apify.PuppeteerCrawler {
                 timeout: 10000,
             });
         } catch (e) { }
+
+        if (shouldAbort()) {
+            return false;
+        }
 
         // comments scroll up with button
         const elements = await (async () => {
@@ -731,25 +744,22 @@ class BaseScraper extends Apify.PuppeteerCrawler {
         if (elements.length > 0) {
             const [button] = elements;
 
-            try {
-                const clicked = await Promise.all([
-                    button.click(),
-                    helpers.acceptCookiesDialog(page),
-                    page.waitForRequest(() => true, { timeout: 10000 }).catch(() => null),
-                ]);
+            const clicked = await Promise.all([
+                button.click(),
+                helpers.acceptCookiesDialog(page),
+                page.waitForRequest(() => true, { timeout: 10000 }).catch(() => null),
+            ]);
 
-                if (!clicked[2]) {
-                    log.debug('no response after click for 10s');
+            if (shouldAbort()) {
+                return false;
+            }
 
-                    return false;
-                }
-            } catch (e) {
-                log.debug('finiteScroll error', { error: e.message, stack: e.stack });
-                // "Node is either not visible or not an HTMLElement" from button.click(), would propagate and
-                // break the whole recursion needlessly
+            if (!clicked[2] && state.hasNextPage) {
+                throw new Error('No response after click for 10s');
             }
         } else {
             log.debug('zero clickable elements');
+
             if (type === 'comments') {
                 // the button is gone when done loading
                 return false;
@@ -758,19 +768,29 @@ class BaseScraper extends Apify.PuppeteerCrawler {
 
         await sleep(1500);
 
+        if (shouldAbort()) {
+            return false;
+        }
+
         /**
          * posts scroll down
          */
         if (type === 'posts') {
-            const scrolled = await Promise.all([
-                page.evaluate(() => window.scrollTo(0, document.body.scrollHeight)),
-                page.waitForRequest(() => true, { timeout: 5000 }).catch(() => null),
-            ]);
+            let tries = 0;
 
-            if (!scrolled[1]) {
-                log.debug('no response scrolling for 5s');
+            while (tries++ < 10) {
+                const scrolled = await Promise.all([
+                    page.evaluate(() => window.scrollTo(0, document.body.scrollHeight)),
+                    page.waitForRequest(() => true, { timeout: 2000 }).catch(() => null),
+                ]);
 
-                return false;
+                if (!scrolled[1]) {
+                    if (tries > 1 && state.hasNextPage) {
+                        throw new Error('No response scrolling for 2s');
+                    }
+                } else {
+                    break;
+                }
             }
         }
 
@@ -786,8 +806,10 @@ class BaseScraper extends Apify.PuppeteerCrawler {
             return false;
         }
 
-        const itemsScrapedCount = Object.keys(state.ids).length;
+        const itemsScrapedCount = scrappedCount();
         const reachedLimit = itemsScrapedCount >= resultsLimit;
+
+        log.debug(`current state`, state);
 
         if (reachedLimit) {
             log.warning(`Reached max ${type} limit: ${resultsLimit}. Finishing scrolling...`);
@@ -803,8 +825,6 @@ class BaseScraper extends Apify.PuppeteerCrawler {
             log.debug(`all duplicates`);
             return true;
         }
-
-        log.debug(`current state`, state);
 
         return true;
     }

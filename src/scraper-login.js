@@ -590,14 +590,24 @@ class LoginScraper extends PublicScraper {
             }
         })();
 
+        log.debug('checkedVariable', { checkedVariable });
+
         page.on('response', async (response) => {
             try {
                 const responseUrl = response.url();
                 const method = response.request().method();
 
-                if (method === 'GET' && responseUrl.startsWith(GRAPHQL_ENDPOINT) && responseUrl.includes(checkedVariable)) {
+                if (method === 'GET' && responseUrl.startsWith(GRAPHQL_ENDPOINT)) {
+                    log.debug(responseUrl);
+
                     if (!this.isValidResponse(response)) {
                         return defer.reject(new Error('Login'));
+                    }
+
+                    // Skip queries for other stuff then posts
+                    if (!responseUrl.includes(checkedVariable) || !responseUrl.includes('%22first%22')) {
+                        log.debug('Skipping', { responseUrl, checkedVariable });
+                        return;
                     }
 
                     // If it fails here, it means that the error was caught in the finite scroll anyway so we just don't do anything
@@ -610,12 +620,18 @@ class LoginScraper extends PublicScraper {
                     })();
 
                     if (!data) {
+                        log.debug('no data');
                         return;
                     }
 
                     control.postpone();
 
                     const timeline = this.getPostsFromGraphQL(pageType, data.data);
+
+                    if (state.hasNextPage && !timeline.hasNextPage) {
+                        log.debug('no more posts from graphql');
+                        state.hasNextPage = false;
+                    }
 
                     return await pushPosts(
                         timeline,
@@ -640,6 +656,11 @@ class LoginScraper extends PublicScraper {
                     control.postpone();
 
                     const timeline = this.getPostsFromEndpoint(pageType, data);
+
+                    if (state.hasNextPage && !timeline.hasNextPage) {
+                        log.debug('no more posts from v1');
+                        state.hasNextPage = false;
+                    }
 
                     await pushPosts(
                         timeline,
