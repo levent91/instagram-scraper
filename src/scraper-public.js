@@ -376,7 +376,7 @@ class PublicScraper extends BaseScraper {
                 }
 
                 if (!e.message.includes('Network.')) {
-                    defer.reject(e);
+                    return defer.reject(e);
                 }
             } finally {
                 await extendScraperFunction(undefined, {

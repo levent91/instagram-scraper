@@ -591,6 +591,7 @@ class LoginScraper extends PublicScraper {
         })();
 
         log.debug('checkedVariable', { checkedVariable });
+        const defer = helpers.deferred();
 
         page.on('response', async (response) => {
             try {
@@ -718,7 +719,6 @@ class LoginScraper extends PublicScraper {
         }
 
         const control = delay(300000);
-        const defer = helpers.deferred();
 
         try {
             // non moving scrollHeight usually means the tab is in the background and
