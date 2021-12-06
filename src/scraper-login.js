@@ -55,7 +55,9 @@ class LoginScraper extends PublicScraper {
                         logins.increaseError(session);
 
                         if (!logins.isUsable(session)) {
-                            throw new Error('Failed to log in using cookies, they are probably no longer usable and you need to set new ones.');
+                            const error = new Error('Failed to log in using cookies, they are probably no longer usable and you need to set new ones.');
+                            this.autoscaledPool?.reject?.(error);
+                            throw error; // safety net
                         }
                     } else {
                         logins.decreaseError(session);

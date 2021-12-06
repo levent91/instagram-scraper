@@ -23,7 +23,7 @@ class PublicScraper extends BaseScraper {
     async formatProfileOutput(context, ig) {
         const { includeTaggedPosts } = this.options.input;
         const following = await this.getProfileFollowing(context, ig);
-        const followedBy = await this.getProfileFollowedBy(context, ig);
+        const followedBy = await this.getProfileFollowers(context, ig);
         const taggedPosts = includeTaggedPosts ? await this.getTaggedPosts(context, ig) : [];
 
         const { entryData } = ig;

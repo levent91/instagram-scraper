@@ -355,61 +355,6 @@ class BaseScraper extends Apify.PuppeteerCrawler {
     }
 
     /**
-     *
-     * @param {consts.PuppeteerContext} context
-     * @param {consts.IGData} ig
-     */
-    async getProfileFollowedBy(context, ig) {
-        const { page } = context;
-        const { likedByLimit } = this.options.input;
-        const { pageData } = ig;
-
-        if (!likedByLimit) return undefined;
-
-        log.info(`Loading users current profile followed by (limit ${likedByLimit} items).`);
-
-        /**
-         * @param {Record<string, any>} data
-         */
-        const nodeTransformationFunction = (data) => {
-            if (!data.user) throw new Error('"Followed by" GraphQL query does not contain user object');
-            if (!data.user.edge_followed_by) throw new Error('"Followed by" GraphQL query does not contain edge_followed_by object');
-            const followedBy = data.user.edge_followed_by;
-            const pageInfo = followedBy.page_info;
-            const endCursor = pageInfo.end_cursor;
-            const users = followedBy.edges.map((followedByItem) => {
-                const { node } = followedByItem;
-
-                return {
-                    id: node.id,
-                    full_name: node.full_name,
-                    username: node.username,
-                    profile_pic_url: node.profile_pic_url,
-                    is_private: node.is_private,
-                    is_verified: node.is_verified,
-                };
-            });
-
-            return { nextPageCursor: endCursor, data: users };
-        };
-
-        const variables = {
-            id: pageData.userId,
-            include_reel: false,
-            fetch_mutual: false,
-        };
-
-        return helpers.finiteQuery(
-            profileFollowersQueryId,
-            variables,
-            nodeTransformationFunction,
-            likedByLimit,
-            page,
-            '[profile followed by]',
-        );
-    }
-
-    /**
      * @param {consts.PuppeteerContext} context
      * @param {consts.IGData} ig
      */
@@ -508,6 +453,56 @@ class BaseScraper extends Apify.PuppeteerCrawler {
             followingLimit,
             page,
             '[profile following]',
+        );
+    }
+
+    /**
+     * @param {consts.PuppeteerContext} context
+     * @param {consts.IGData} ig
+     */
+    async getProfileFollowers(context, ig) {
+        const { followedByLimit } = this.options.input;
+        const { page } = context;
+        const { pageData } = ig;
+
+        log.info(`Loading users current profile followers (limit ${followedByLimit} items).`);
+
+        /**
+         * @param {Record<string, any>} data
+         */
+        const nodeTransformationFunction = (data) => {
+            if (!data.user) throw new Error('"Following" GraphQL query does not contain user object');
+            if (!data.user.edge_follow) throw new Error('"Following" GraphQL query does not contain edge_follow object');
+            const following = data.user.edge_follow;
+            const pageInfo = following.page_info;
+            const endCursor = pageInfo.end_cursor;
+            const users = following.edges.map((followingItem) => {
+                const { node } = followingItem;
+                return {
+                    id: node.id,
+                    full_name: node.full_name,
+                    username: node.username,
+                    profile_pic_url: node.profile_pic_url,
+                    is_private: node.is_private,
+                    is_verified: node.is_verified,
+                };
+            });
+            return { nextPageCursor: endCursor, data: users };
+        };
+
+        const variables = {
+            id: pageData.userId,
+            include_reel: false,
+            fetch_mutual: false,
+        };
+
+        return helpers.finiteQuery(
+            profileFollowersQueryId,
+            variables,
+            nodeTransformationFunction,
+            followedByLimit,
+            page,
+            '[profile followers]',
         );
     }
 
