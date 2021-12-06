@@ -5,7 +5,7 @@ const Puppeteer = require('puppeteer');
 
 const { resourceCache } = require('./resource-cache');
 const helpers = require('./helpers');
-const { formatSinglePost, formatIGTVVideo, formatDisplayResources } = require('./details');
+const { formatSinglePost } = require('./details');
 
 const consts = require('./consts');
 
@@ -61,10 +61,14 @@ class BaseScraper extends Apify.PuppeteerCrawler {
             persistCookiesPerSession: false,
             useSessionPool: true,
             postNavigationHooks: [async ({ page }) => {
-                if (!page.isClosed()) {
-                    await helpers.addLoopToPage(page);
-                    await memoryCache(page);
-                    await page.bringToFront();
+                try {
+                    if (!page.isClosed()) {
+                        await helpers.addLoopToPage(page);
+                        await memoryCache(page);
+                        await page.bringToFront();
+                    }
+                } catch (e) {
+                    log.debug(e.message);
                 }
             }],
             preNavigationHooks: [async ({ request, page }, gotoOptions) => {
@@ -172,14 +176,15 @@ class BaseScraper extends Apify.PuppeteerCrawler {
             return;
         }
 
-        const entryData = await helpers.getEntryData(page);
+        const [entryData, additionalData] = await Promise.all([
+            helpers.getEntryData(page),
+            helpers.getAdditionalData(page),
+        ]);
 
         if (entryData.LoginAndSignupPage || entryData.LandingPage) {
             session.retire();
             throw errors.redirectedToLogin();
         }
-
-        const additionalData = await helpers.getAdditionalData(page);
 
         const pageData = this.getPageData({ entryData, additionalData });
 
@@ -669,6 +674,8 @@ class BaseScraper extends Apify.PuppeteerCrawler {
     }
 
     /**
+     * Keeps track of the global state for the page.
+     *
      * @param {consts.PuppeteerContext} context
      * @param {consts.IGData} ig
      * @param {'comments' | 'posts'} type
@@ -693,6 +700,7 @@ class BaseScraper extends Apify.PuppeteerCrawler {
                 }
             } catch (e) {
                 // Target closed error
+                log.debug(e.message, { url: context.request.url });
                 return true;
             }
 
@@ -742,7 +750,7 @@ class BaseScraper extends Apify.PuppeteerCrawler {
             const clicked = await Promise.all([
                 button.click(),
                 helpers.acceptCookiesDialog(page),
-                page.waitForRequest(() => true, { timeout: 10000 }).catch(() => null),
+                page.waitForResponse(() => true, { timeout: 10000 }).catch(() => null),
             ]);
 
             if (shouldAbort()) {
@@ -776,7 +784,7 @@ class BaseScraper extends Apify.PuppeteerCrawler {
             while (tries++ < 10) {
                 const scrolled = await Promise.all([
                     page.evaluate(() => window.scrollTo(0, document.body.scrollHeight)),
-                    page.waitForRequest(() => true, { timeout: 2000 }).catch(() => null),
+                    page.waitForResponse(() => true, { timeout: 2000 }).catch(() => null),
                 ]);
 
                 if (!scrolled[1]) {
@@ -839,6 +847,14 @@ class BaseScraper extends Apify.PuppeteerCrawler {
      */
     async scrapePosts(context, ig) {
         this.throwNonImplemented(context, 'Scraping post is not implemented');
+    }
+
+    /**
+     * @param {consts.PuppeteerContext} context
+     * @param {consts.IGData} ig
+     */
+    async scrapeDetails(context, ig) {
+        this.throwNonImplemented(context, 'Scrape details is not implemented');
     }
 
     /**

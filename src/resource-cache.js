@@ -54,7 +54,7 @@ const resourceCache = (paths) => {
             try {
                 if (page.isClosed()) {
                     page.removeAllListeners('request');
-                    return;
+                    return await req.continue();
                 }
 
                 const url = req.url();

@@ -478,7 +478,6 @@ class LoginScraper extends PublicScraper {
         const postInfo = helpers.parseCaption(caption);
 
         return {
-            id: `${item.id}`,
             locationName: item.location?.name ?? null,
             locationId: item.location?.pk ? `${item.location.pk}` : null,
             locationLat: item.location?.lat ?? null,
@@ -594,6 +593,7 @@ class LoginScraper extends PublicScraper {
 
         log.debug('checkedVariable', { checkedVariable });
         const defer = helpers.deferred();
+        const control = delay(300000);
 
         page.on('response', async (response) => {
             try {
@@ -601,8 +601,6 @@ class LoginScraper extends PublicScraper {
                 const method = response.request().method();
 
                 if (method === 'GET' && responseUrl.startsWith(GRAPHQL_ENDPOINT)) {
-                    log.debug(responseUrl);
-
                     if (!this.isValidResponse(response)) {
                         return defer.reject(new Error('Login'));
                     }
@@ -622,7 +620,7 @@ class LoginScraper extends PublicScraper {
                         }
                     })();
 
-                    if (!data) {
+                    if (!data?.data) {
                         log.debug('no data');
                         return;
                     }
@@ -652,7 +650,7 @@ class LoginScraper extends PublicScraper {
                         }
                     })();
 
-                    if (!data?.sections) {
+                    if (!data) {
                         return;
                     }
 
@@ -719,8 +717,6 @@ class LoginScraper extends PublicScraper {
             state.hasNextPage = false;
             return;
         }
-
-        const control = delay(300000);
 
         try {
             // non moving scrollHeight usually means the tab is in the background and

@@ -109,7 +109,7 @@ const loginManager = async ({ loginCookies, maxErrorCount }) => {
                     await page.setCookie(...l.cookies
                         .filter((s) => `${s.domain}`.includes('instagram'))
                         .map(({
-                            expirationDate,
+                            expirationDate, // remove all those properties from the cookie
                             id,
                             storeId,
                             size,

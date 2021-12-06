@@ -15,27 +15,15 @@ const { sleep, log } = Apify.utils;
  */
 const getAdditionalData = (page) => {
     return page.evaluate(async () => {
-        return new Promise((resolve) => {
-            let tries = 10;
+        const script = [...document.querySelectorAll('script')].find((s) => /__additionalDataLoaded\(/.test(s.innerHTML));
 
-            const searchScripts = () => {
-                const script = [...document.querySelectorAll('script')].find((s) => /__additionalDataLoaded\(/.test(s.innerHTML));
+        if (script) {
+            try {
+                return JSON.parse(script.innerHTML.split(/window\.__additionalDataLoaded\([^,]+?,/, 2)[1].slice(0, -2));
+            } catch (e) {}
+        }
 
-                if (script) {
-                    try {
-                        return resolve(JSON.parse(script.innerHTML.split(/window\.__additionalDataLoaded\([^,]+?,/, 2)[1].slice(0, -2)));
-                    } catch (e) { }
-                }
-
-                if (tries-- > 0) {
-                    setTimeout(searchScripts, 100);
-                } else {
-                    resolve({});
-                }
-            };
-
-            setTimeout(searchScripts);
-        });
+        return {};
     });
 };
 

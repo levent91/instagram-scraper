@@ -394,6 +394,8 @@ class PublicScraper extends BaseScraper {
             return;
         }
 
+        await pushPosts(timeline);
+
         // Check if the posts loaded properly
         if (pageType === PAGE_TYPES.PROFILE) {
             const profilePageSel = '.ySN3v';
@@ -426,8 +428,6 @@ class PublicScraper extends BaseScraper {
                 throw new Error('Place/location or hashtag page didn\'t load properly, trying again...');
             }
         }
-
-        await pushPosts(timeline);
 
         try {
             // Places/locations don't allow scrolling without login
