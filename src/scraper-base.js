@@ -471,13 +471,13 @@ class BaseScraper extends Apify.PuppeteerCrawler {
          * @param {Record<string, any>} data
          */
         const nodeTransformationFunction = (data) => {
-            if (!data.user) throw new Error('"Following" GraphQL query does not contain user object');
-            if (!data.user.edge_follow) throw new Error('"Following" GraphQL query does not contain edge_follow object');
-            const following = data.user.edge_follow;
-            const pageInfo = following.page_info;
+            if (!data.user) throw new Error('"Followers" GraphQL query does not contain user object');
+            if (!data.user.edge_followed_by) throw new Error('"Followers" GraphQL query does not contain edge_follow object');
+            const followers = data.user.edge_followed_by;
+            const pageInfo = followers.page_info;
             const endCursor = pageInfo.end_cursor;
-            const users = following.edges.map((followingItem) => {
-                const { node } = followingItem;
+            const users = followers.edges.map((follower) => {
+                const { node } = follower;
                 return {
                     id: node.id,
                     full_name: node.full_name,
