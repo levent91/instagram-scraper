@@ -17,9 +17,9 @@ Use our super fast and easy dedicated scrapers if you want to scrape specific In
 - [Instagram Hashtag Scraper](https://apify.com/zuzka/instagram-hashtag-scraper)
 - [Instagram Profile Scraper](https://apify.com/zuzka/instagram-profile-scraper)
 - [Instagram Post Scraper](https://apify.com/zuzka/instagram-post-scraper)
-- [Instagram Comments Scraper](https://apify.com/zuzka/instagram-comment-scraper)
+- [Instagram Comment Scraper](https://apify.com/zuzka/instagram-comment-scraper)
 
-Try them out or let us know if you need a [custom Instagram scraping solution](https://apify.com/custom-solutions).
+Or let us know if you need a [custom Instagram scraping solution](https://apify.com/custom-solutions).
 
 ## Why scrape Instagram?
 Instagram has about 1 billion monthly active users and is especially popular with younger users, a demographic that can otherwise be difficult for brands to reach. With so many active users, you can imagine that there is a lot of useful data on the site. 
@@ -35,7 +35,7 @@ So what could you do with that data? Here are some ideas:
 If you want more ideas, check out our [industries pages](https://apify.com/industries) for ways web scraping is already being used in a wide range of companies.
 
 ## Tutorial
-If you want to know more about how the Instagram Scraper works, here's a detailed explanation and [step-by-step guide](https://blog.apify.com/scrape-instagram-posts-comments-and-more-21d05506aeb3/) with screenshots and examples.
+If you want to know more about how Instagram Scraper works, here's a detailed explanation and [step-by-step guide](https://blog.apify.com/scrape-instagram-posts-comments-and-more-21d05506aeb3/) with screenshots and examples.
 
 ## Cost of usage
 There are two main factors to take into account if you want to run Instagram Scraper on the Apify platform:
@@ -53,13 +53,13 @@ The Apify platform [provides residential proxies](https://apify.com/proxy?pricin
 ### Custom proxies
 You can also use proxies from other providers in the custom proxies fields (`proxyUrls` in the JSON settings).
 
-### Profile scraping
+### Cost of usage for profile scraping
 Scraping **1,000 profiles** requires about:
-- **10 Compute units**
+- **10 compute units**
 - **0.24 GB of proxy traffic**
 
 ### Example pricing
-Based on Apify's pricing at the time of writing, scraping **1,000 profiles** would cost 10 CU * $0.25 + 0.24 GB * 12.5 GB, which is a total of **$5.50**. The Personal plan ($49) would allow you to scrape about 9,000 Instagram profiles monthly.
+Based on Apify's pricing at the time of writing, scraping **1,000 profiles** would cost 10 CU * $0.25 + 0.24 GB * 12.5 GB, which is a total of **$5.50**. The Apify Personal plan ($49) would allow you to scrape about 9,000 Instagram profiles monthly.
 
 ## Input parameters
 The input of this scraper should be JSON containing the list of pages on Instagram that should be visited. Required fields are:
@@ -85,7 +85,7 @@ The input of this scraper should be JSON containing the list of pages on Instagr
 ## Scrolling through large profiles or posts
 Instagram imposes rate limits that will block scrolling if you want to scroll for more than 1,000 posts or comments. To work around this issue, the scraper starts injecting randomized wait times once you reach 1,000 posts or comments. This is configurable by means of the `scrollWaitSecs` input parameter. If you get the message that you were rate limited, consider increasing this parameter for the specific profile or post.
 
-### Instagram scraper Input example
+### Instagram scraper input example
 
 ```jsonc
 {
