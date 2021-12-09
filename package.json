@@ -25,8 +25,8 @@
     "license": "ISC",
     "homepage": "https://github.com/gippy/instagram-scraper",
     "devDependencies": {
-        "@apify/eslint-config": "^0.1.4",
-        "@types/lodash": "^4.14.175",
+        "@apify/eslint-config": "^0.2.2",
+        "@types/lodash": "^4.14.177",
         "eslint": "^7.32.0"
     }
 }
