@@ -138,6 +138,7 @@
             "editor": "number",
             "unit": "likes",
             "default": 0,
+            "prefill": 0,
             "sectionCaption": "Followers, following, likes (only with Instagram login)",
             "sectionDescription": "Features that require login. If limits in this section are set above 0, then when the scraper enters a page, it attempts to load the specified items until the limit is reached. "
         },
@@ -147,7 +148,8 @@
             "description": "If this limit is set above 0, then the scraper will attempt to find users followed by the profile owner.",
             "editor": "number",
             "unit": "users",
-            "default": 0
+            "default": 0,
+            "prefill": 0
         },
         "followedByLimit": {
             "title": "Get profile followed by",
@@ -155,7 +157,8 @@
             "description": "If this limit is set above 0, then the scraper will attempt to find users who follow the profile owner.",
             "editor": "number",
             "unit": "users",
-            "default": 0
+            "default": 0,
+            "prefill": 0
         },
         "extendOutputFunction": {
             "title": "Extend Output Function",
