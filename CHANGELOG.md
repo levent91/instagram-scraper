@@ -1,3 +1,27 @@
+### 2021-11-14
+
+Features:
+- Complete rewrite of code
+- Standardized output between logged in and public scrapes
+- Better login session management
+- Added `relatedProfiles`
+
+Fix:
+- Logged in information
+- Stuck scraping scroll types (posts and comments)
+- Better performance
+- Less wasteful loops
+- Followers, following, tagged posts, location for posts
+- Don't get stuck with dead proxies
+- Comments counts
+
+Breaking changes:
+- Removed login server (username / password)
+- Format have changed for `#debug` key
+- Some inputs were removed
+- Fails the run when providing RESIDENTIAL with login cookies
+- Invalid cookies are not allowed to run
+
 ### 2021-10-22
 
 Fix:

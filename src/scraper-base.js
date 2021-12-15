@@ -613,7 +613,7 @@ class BaseScraper extends Apify.PuppeteerCrawler {
         const state = this.initScrollingState(id);
 
         if (!resultsLimit || !items?.length) {
-            return;
+            return 0;
         }
 
         state.allDuplicates = false;
@@ -653,6 +653,8 @@ class BaseScraper extends Apify.PuppeteerCrawler {
 
         // We have to tell the state if we are going though duplicates so it knows it should still continue scrolling
         state.allDuplicates = itemsPushed === 0;
+
+        return currentCount();
     }
 
     /**
@@ -896,12 +898,13 @@ class BaseScraper extends Apify.PuppeteerCrawler {
      * @param {consts.IGData} ig
      */
     async scrapeComments(context, ig) {
-        const { page } = context;
+        const { page, session } = context;
 
         // Check if the page loaded properly
         try {
             await page.waitForSelector('.EtaWk', { timeout: 15000 });
         } catch (e) {
+            session.markBad();
             throw new Error(`Post page didn't load properly, opening again`);
         }
     }
@@ -916,6 +919,7 @@ class BaseScraper extends Apify.PuppeteerCrawler {
             return {
                 id: item.node.id,
                 postId: pageData.id,
+                shortCode: pageData.id,
                 text: item.node.text,
                 position: index + currentScrollingPosition + 1,
                 timestamp: new Date(parseInt(item.node.created_at, 10) * 1000).toISOString(),

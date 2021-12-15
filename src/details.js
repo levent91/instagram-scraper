@@ -17,7 +17,7 @@ const formatIGTVVideo = (edge) => {
         shortCode: node.shortcode,
         title: node.title,
         caption: node?.edge_media_to_caption?.edges?.length ? node.edge_media_to_caption.edges[0].node.text : '',
-        commentsCount: node.edge_media_to_comment.count,
+        commentsCount: node?.edge_media_to_comment?.count,
         commentsDisabled: node.comments_disabled,
         dimensionsHeight: node.dimensions.height,
         dimensionsWidth: node.dimensions.width,
@@ -54,18 +54,20 @@ const sidecarImages = (node) => {
  */
 const formatSinglePost = (node) => {
     const comments = {
-        count: Math.max(...[
+        count: [
             node.edge_media_to_comment?.count,
             node.edge_media_to_parent_comment?.count,
             node.edge_media_preview_comment?.count,
             node.edge_media_to_hoisted_comment?.count,
-        ].filter(Boolean)),
+        ].reduce((out, count) => (out + (count ?? 0)), 0),
         edges: [
-            ...(node.edge_media_to_comment?.edges ?? []),
-            ...(node.edge_media_to_parent_comment?.edges ?? []),
-            ...(node.edge_media_preview_comment?.edges ?? []),
-            ...(node.edge_media_to_hoisted_comment?.edges ?? []),
-        ],
+            node.edge_media_to_comment?.edges,
+            node.edge_media_to_parent_comment?.edges,
+            node.edge_media_preview_comment?.edges,
+            node.edge_media_to_hoisted_comment?.edges,
+        ].reduce((out, edges) => {
+            return out.concat(edges ?? []);
+        }, []),
     };
     const likes = node.edge_liked_by || node.edge_media_preview_like;
     const caption = node?.edge_media_to_caption?.edges?.length
@@ -101,9 +103,9 @@ const formatSinglePost = (node) => {
             : null,
         locationName: node.location?.name ?? null,
         locationId: node.location?.id ?? null,
-        ownerFullName: node.owner ? node.owner.full_name : null,
-        ownerUsername: node.owner ? node.owner.username : null,
-        ownerId: node.owner ? node.owner.id : null,
+        ownerFullName: node?.owner?.full_name ?? null,
+        ownerUsername: node?.owner?.username ?? null,
+        ownerId: node?.owner?.id ?? null,
         productType: node.product_type,
         isSponsored: node.is_ad,
         videoDuration: node.video_duration,

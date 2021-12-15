@@ -39,8 +39,26 @@ const loginManager = async ({ loginCookies, maxErrorCount }) => {
         });
     }
 
+    const checkForValidCookies = () => {
+        for (const login of logins.values()) {
+            if (!login.cookies.length) {
+                return false;
+            }
+
+            if (!login.cookies.every((s) => !!s.name)) {
+                return false;
+            }
+        }
+
+        return true;
+    };
+
     if (!logins.size) {
         throw new Error('No usable loginCookies from input');
+    }
+
+    if (!checkForValidCookies()) {
+        throw new Error('Your provided cookies arent valid');
     }
 
     return {

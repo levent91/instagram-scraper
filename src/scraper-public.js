@@ -17,6 +17,17 @@ const { log } = Apify.utils;
 
 class PublicScraper extends BaseScraper {
     /**
+     * @param {consts.Options} options
+     */
+    constructor(options) {
+        super(options);
+
+        this.sessionPoolOptions.sessionOptions = {
+            maxErrorScore: 0.5,
+        };
+    }
+
+    /**
      * @param {consts.PuppeteerContext} context
      * @param {consts.IGData} ig
      */
@@ -50,6 +61,7 @@ class PublicScraper extends BaseScraper {
             profilePicUrlHD: data.profile_pic_url_hd,
             facebookPage: data.connected_fb_page,
             igtvVideoCount: data.edge_felix_video_timeline.count,
+            relatedProfiles: data?.edge_related_profiles?.edges?.map(({ node }) => node) ?? [],
             latestIgtvVideos: data.edge_felix_video_timeline ? data.edge_felix_video_timeline.edges.map(formatIGTVVideo) : [],
             postsCount: data.edge_owner_to_timeline_media.count,
             latestPosts: data.edge_owner_to_timeline_media ? data.edge_owner_to_timeline_media.edges.map((edge) => edge.node).map(formatSinglePost) : [],
@@ -276,7 +288,7 @@ class PublicScraper extends BaseScraper {
      * @param {consts.IGData} ig
      */
     async scrapePosts(context, ig) {
-        const { extendScraperFunction, extendOutputFunction } = this.options;
+        const { extendScraperFunction, extendOutputFunction, input: { resultsLimit } } = this.options;
         const { page, request } = context;
         const { pageData } = ig;
         const { pageType } = pageData;
@@ -394,7 +406,12 @@ class PublicScraper extends BaseScraper {
             return;
         }
 
-        await pushPosts(timeline);
+        const pushed = await pushPosts(timeline);
+
+        if (!timeline.hasNextPage || pushed >= resultsLimit) {
+            log.debug('Premature finish', { pushed, count: timeline.postsCount, nextPage: timeline.hasNextPage });
+            return;
+        }
 
         // Check if the posts loaded properly
         if (pageType === PAGE_TYPES.PROFILE) {

@@ -275,6 +275,7 @@ class LoginScraper extends PublicScraper {
             return {
                 id: `${item.pk}`,
                 postId: `${pageData.id}`,
+                shortCode: `${pageData.id}`,
                 text: item.text,
                 position: index + currentScrollingPosition + 1,
                 timestamp: new Date(parseInt(item.created_at_utc, 10) * 1000).toISOString(),

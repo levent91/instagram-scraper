@@ -43,7 +43,6 @@ Apify.main(async () => {
 
     const proxyConfiguration = await helpers.proxyConfiguration({
         proxyConfig: proxy,
-        hint: !usingLoginCookies ? ['RESIDENTIAL'] : [],
     });
 
     try {
@@ -60,8 +59,8 @@ Apify.main(async () => {
         throw new Error('Run aborted');
     }
 
-    if (Apify.isAtHome()) {
-        if (!usingLoginCookies && proxyConfiguration?.usesApifyProxy && proxyConfiguration?.groups?.includes('RESIDENTIAL') === false) {
+    if (Apify.isAtHome() && proxyConfiguration?.usesApifyProxy === true) {
+        if (!usingLoginCookies && proxyConfiguration?.groups?.includes('RESIDENTIAL') === false) {
             log.warning(`
 --------
         You are using Apify proxy but not the RESIDENTIAL group! It is very likely it will not work properly.
@@ -70,10 +69,10 @@ Apify.main(async () => {
         }
 
         if (usingLoginCookies && proxyConfiguration?.groups?.includes('RESIDENTIAL') === true) {
-            log.warning(`
+            throw new Error(`
 --------
         RESIDENTIAL proxy group when using login cookies is not advised as the location of the IP will keep changing.
-        If the login cookies are getting logged out, try changing to a datacenter proxy.
+        Change to a datacenter proxy.
 --------`);
         }
     }
