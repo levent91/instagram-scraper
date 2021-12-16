@@ -165,6 +165,10 @@ class BaseScraper extends Apify.PuppeteerCrawler {
             throw new Error('Response is undefined');
         }
 
+        if (response.status() >= 500) {
+            throw new Error(`Non-standard status code ${response.status()}, retrying`);
+        }
+
         if (response.status() === 404) {
             request.noRetry = true;
             throw errors.doesntExist();
