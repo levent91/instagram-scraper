@@ -608,7 +608,9 @@ const patchInput = (input) => {
         if (typeof input.extendOutputFunction === 'string' && !input.extendOutputFunction.startsWith('async')) {
             // old extend output function, rewrite it to use the new format that will be
             // picked by the extendFunction helper
-            log.warning(`\n-------\nYour "extendOutputFunction" parameter is wrong, so it's being defaulted to a working one. Please change it to conform to the proper format or leave it empty\n-------\n`);
+            if (input.extendOutputFunction) {
+                log.warning(`\n-------\nYour "extendOutputFunction" parameter is wrong, so it's being defaulted to a working one. Please change it to conform to the proper format or leave it empty\n-------\n`);
+            }
             input.extendOutputFunction = '';
         }
 
