@@ -1,3 +1,14 @@
+### 2022-01-06
+
+Features:
+- Add new URL type `/tv/` for videos
+- Make `includeRelatedProfiles` an input option
+- Using browser fingerprints with incognito mode
+
+Fix:
+- Random stuck runs
+- Not getting all loaded comments on page load
+
 ### 2021-11-14
 
 Features:

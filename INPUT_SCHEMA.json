@@ -213,6 +213,12 @@
             "type": "boolean",
             "description": "Get the tagged posts for each profile",
             "editor": "checkbox"
+        },
+        "includeRelatedProfiles": {
+            "title": "Include related profiles",
+            "type": "boolean",
+            "description": "Get the related profiles for each input profile",
+            "editor": "checkbox"
         }
     },
     "required": ["proxy"]

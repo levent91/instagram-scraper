@@ -74,9 +74,6 @@ class BaseScraper extends Apify.PuppeteerCrawler {
             preNavigationHooks: [async ({ request, page }, gotoOptions) => {
                 gotoOptions.waitUntil = 'domcontentloaded';
 
-                const locale = new URL(request.url).searchParams.get('hl');
-
-                await page.setUserAgent(headerGenerator.getHeaders({ locales: locale ? [locale] : [] })['user-agent']);
                 await page.setBypassCSP(true);
 
                 await Apify.utils.puppeteer.blockRequests(page, {
@@ -94,8 +91,12 @@ class BaseScraper extends Apify.PuppeteerCrawler {
                 log.info(`Opening page type: ${pageType} on ${request.url}`);
             }],
             maxRequestRetries: options.input.maxRequestRetries,
+            launchContext: {
+                useIncognitoPages: true,
+            },
             browserPoolOptions: {
                 maxOpenPagesPerBrowser: 1,
+                useFingerprints: true,
                 preLaunchHooks: [async (pageId, launchContext) => {
                     const { request } = this.crawlingContexts.get(pageId);
 

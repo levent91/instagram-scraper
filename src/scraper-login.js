@@ -487,7 +487,7 @@ class LoginScraper extends PublicScraper {
             shortCode: item.code,
             caption,
             ...postInfo,
-            url: `https://www.instagram.com/p/${item.code}`,
+            url: `https://www.instagram.com/p/${item.code}/`,
             commentsCount: item.comment_count || 0,
             latestComments,
             dimensionsHeight: item.original_height,
@@ -500,9 +500,7 @@ class LoginScraper extends PublicScraper {
             alt: null,
             likesCount: item.like_count ?? null,
             videoViewCount: item.video_view_count,
-            timestamp: item.caption?.created_at_utc
-                ? new Date(item.caption.created_at_utc * 1000).toISOString()
-                : null,
+            timestamp: helpers.secondsToDate(item.caption?.created_at_utc),
             ...this.formatEndpointUser(item.user),
             productType: item.product_type,
             isSponsored: item.is_commercial,

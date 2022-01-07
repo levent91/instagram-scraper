@@ -384,6 +384,24 @@ const getPageTypeFromUrl = (url) => {
 };
 
 /**
+ * Deduplicates an array of objects by a property
+ * @template {Record<string, any>} T
+ * @param {string} prop
+ * @returns {(arr: T[]) => T[]}
+ */
+const dedupArrayByProperty = (prop) => (arr) => {
+    const map = new Map();
+
+    for (const item of arr) {
+        if (item && prop in item) {
+            map.set(item[prop], item);
+        }
+    }
+
+    return Array.from(map.values());
+};
+
+/**
  * Takes page type and outputs variable that must be present in graphql query
  * @param {string} pageType
  */
@@ -683,6 +701,41 @@ const minMaxDates = ({ min, max }) => {
     };
 };
 
+/**
+ * @template {string} C
+ * @param {C} prop
+ * @returns {<T extends { [C]: any }>(obj: T) => T[C] | never}
+ */
+const mapProp = (prop) => (obj) => obj?.[prop];
+
+const dedupById = dedupArrayByProperty('id');
+const mapNode = mapProp('node');
+
+/**
+ * @param {number} value
+ */
+const secondsToDate = (value) => {
+    // eslint-disable-next-line no-nested-ternary
+    return +value ? new Date(value * 1000).toISOString() : (value ? `${value}` : null);
+};
+
+/**
+ * Extract `node` from the array
+ *
+ * @param {any[]} arr
+ */
+const arrayNodes = (arr) => (arr && Array.isArray(arr) ? arr : []).map(mapNode);
+
+/**
+ * @param {any[]} arr
+ * @returns {string[]}
+ */
+const edgesToText = (arr) => {
+    return arrayNodes(arr)
+        .map(({ text }) => text?.trim())
+        .filter(Boolean);
+};
+
 module.exports = {
     getPageTypeFromUrl,
     getCheckedVariable,
@@ -704,4 +757,11 @@ module.exports = {
     addLoopToPage,
     getEntryData,
     getAdditionalData,
+    dedupArrayByProperty,
+    dedupById,
+    mapNode,
+    mapProp,
+    arrayNodes,
+    edgesToText,
+    secondsToDate,
 };

@@ -28,7 +28,8 @@ const Apify = require('apify');
  *     likedByLimit: number,
  *     followingLimit: number,
  *     followedByLimit: number,
- *     expandOwners: boolean
+ *     expandOwners: boolean,
+ *     includeRelatedProfiles: boolean,
  *   },
  *   scrollingState: {
  *      [index: string]: {
@@ -80,10 +81,10 @@ module.exports = {
     },
     PAGE_TYPE_URL_REGEXES: {
         PLACE: /https:\/\/(www\.)?instagram\.com\/explore\/locations\/.+/u,
-        PROFILE: /https:\/\/(www\.)?instagram\.com\/[^/]{2,}\/?$/u,
-        HASHTAG: /https:\/\/(www\.)?instagram\.com\/explore\/tags\/.+/u,
-        POST: /https:\/\/(www\.)?instagram\.com\/(p|reel)\/.+/u,
         STORY: /https:\/\/(www\.)?instagram\.com\/stories\/.+/u,
+        HASHTAG: /https:\/\/(www\.)?instagram\.com\/explore\/tags\/.+/u,
+        POST: /https:\/\/(www\.)?instagram\.com\/(p|reel|tv)\/.+/u,
+        PROFILE: /https:\/\/(www\.)?instagram\.com\/[^/]{2,}\/?$/u,
     },
     // Instagrams GraphQL Endpoint URL
     GRAPHQL_ENDPOINT: 'https://www.instagram.com/graphql/query/',

@@ -8,7 +8,7 @@ const consts = require('./consts');
 const { PAGE_TYPES, GRAPHQL_ENDPOINT } = consts;
 const BaseScraper = require('./scraper-base');
 
-const { formatSinglePost, formatIGTVVideo, formatDisplayResources } = require('./details');
+const { formatSinglePost, formatIGTVVideo } = require('./details');
 
 const errors = require('./errors');
 const helpers = require('./helpers');
@@ -32,7 +32,7 @@ class PublicScraper extends BaseScraper {
      * @param {consts.IGData} ig
      */
     async formatProfileOutput(context, ig) {
-        const { includeTaggedPosts } = this.options.input;
+        const { includeTaggedPosts, includeRelatedProfiles } = this.options.input;
         const following = await this.getProfileFollowing(context, ig);
         const followedBy = await this.getProfileFollowers(context, ig);
         const taggedPosts = includeTaggedPosts ? await this.getTaggedPosts(context, ig) : [];
@@ -61,7 +61,9 @@ class PublicScraper extends BaseScraper {
             profilePicUrlHD: data.profile_pic_url_hd,
             facebookPage: data.connected_fb_page,
             igtvVideoCount: data.edge_felix_video_timeline.count,
-            relatedProfiles: data?.edge_related_profiles?.edges?.map(({ node }) => node) ?? [],
+            relatedProfiles: includeRelatedProfiles
+                ? (data.edge_related_profiles?.edges?.map(helpers.mapNode) ?? [])
+                : [],
             latestIgtvVideos: data.edge_felix_video_timeline ? data.edge_felix_video_timeline.edges.map(formatIGTVVideo) : [],
             postsCount: data.edge_owner_to_timeline_media.count,
             latestPosts: data.edge_owner_to_timeline_media ? data.edge_owner_to_timeline_media.edges.map((edge) => edge.node).map(formatSinglePost) : [],
@@ -167,7 +169,6 @@ class PublicScraper extends BaseScraper {
         await super.scrapeComments(context, ig);
 
         const { extendOutputFunction } = this.options;
-        const { page } = context;
         const { entryData, pageData } = ig;
 
         const postData = entryData.PostPage?.[0]?.graphql;
@@ -214,8 +215,6 @@ class PublicScraper extends BaseScraper {
             captionIsEdited: typeof data.caption_is_edited !== 'undefined' ? data.caption_is_edited : null,
             hasRankedComments: data.has_ranked_comments,
             commentsDisabled: data.comments_disabled,
-            displayResourceUrls: data.edge_sidecar_to_children ? formatDisplayResources(data.edge_sidecar_to_children.edges) : null,
-            childPosts: data.edge_sidecar_to_children ? data.edge_sidecar_to_children.edges.map((child) => formatSinglePost(child.node)) : null,
             locationSlug: data.location ? data.location.slug : null,
             isAdvertisement: typeof data.is_ad !== 'undefined' ? data.is_ad : null,
             taggedUsers: data.edge_media_to_tagged_user ? data.edge_media_to_tagged_user.edges.map((edge) => edge.node.user.username) : [],
@@ -468,6 +467,8 @@ class PublicScraper extends BaseScraper {
                         if (!ret) {
                             break;
                         }
+
+                        await page.deleteCookie(...(await page.cookies()));
                     }
                 })(),
             ]);
