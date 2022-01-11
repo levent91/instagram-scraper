@@ -1,4 +1,3 @@
-const HeaderGenerator = require('header-generator');
 const Apify = require('apify');
 // eslint-disable-next-line no-unused-vars
 const Puppeteer = require('puppeteer');
@@ -34,18 +33,6 @@ class BaseScraper extends Apify.PuppeteerCrawler {
             requestQueue,
             ...rest
         } = options;
-
-        const headerGenerator = new HeaderGenerator({
-            browsers: [
-                { name: 'chrome', minVersion: 87 },
-            ],
-            devices: [
-                'desktop',
-            ],
-            operatingSystems: process.platform === 'win32'
-                ? ['windows']
-                : ['linux'],
-        });
 
         // keeps JS and CSS in a memory cache, since request interception disables cache
         const memoryCache = resourceCache([
@@ -920,7 +907,7 @@ class BaseScraper extends Apify.PuppeteerCrawler {
      * @param {number} currentScrollingPosition
      */
     parseCommentsForOutput(comments, pageData, currentScrollingPosition) {
-        return comments.map((item, index) => {
+        return (comments ?? []).map((item, index) => {
             return {
                 id: item.node.id,
                 postId: pageData.id,

@@ -84,6 +84,10 @@ class LoginScraper extends PublicScraper {
     getCommentsFromGraphQL(data) {
         const { comments, comment_count, has_more_comments, has_more_headload_comments } = data;
 
+        if (!comments?.length) {
+            return super.getCommentsFromGraphQL(data);
+        }
+
         return {
             comments,
             hasNextPage: has_more_headload_comments || has_more_comments,
@@ -270,20 +274,24 @@ class LoginScraper extends PublicScraper {
      * @param {Record<string, any>} pageData
      * @param {number} currentScrollingPosition
      */
-    parseCommentsForOutput(comments = [], pageData, currentScrollingPosition) {
-        return comments.map((item, index) => {
-            return {
-                id: `${item.pk}`,
-                postId: `${pageData.id}`,
-                shortCode: `${pageData.id}`,
-                text: item.text,
-                position: index + currentScrollingPosition + 1,
-                timestamp: new Date(parseInt(item.created_at_utc, 10) * 1000).toISOString(),
-                ownerIsVerified: item?.user?.is_verified ?? null,
-                ownerProfilePicUrl: item?.owner?.profile_pic_url ?? null,
-                ...this.formatEndpointUser(item.user),
-            };
-        });
+    parseCommentsForOutput(comments, pageData, currentScrollingPosition) {
+        try {
+            return (comments ?? []).map((item, index) => {
+                return {
+                    id: `${item.pk}`,
+                    postId: `${pageData.id}`,
+                    shortCode: `${pageData.id}`,
+                    text: item.text,
+                    position: index + currentScrollingPosition + 1,
+                    timestamp: new Date(parseInt(item.created_at_utc, 10) * 1000).toISOString(),
+                    ownerIsVerified: item?.user?.is_verified ?? null,
+                    ownerProfilePicUrl: item?.owner?.profile_pic_url ?? null,
+                    ...this.formatEndpointUser(item.user),
+                };
+            });
+        } catch (e) {
+            return super.parseCommentsForOutput(comments, pageData, currentScrollingPosition);
+        }
     }
 
     /**

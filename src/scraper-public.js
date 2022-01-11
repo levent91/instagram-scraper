@@ -169,9 +169,10 @@ class PublicScraper extends BaseScraper {
         await super.scrapeComments(context, ig);
 
         const { extendOutputFunction } = this.options;
-        const { entryData, pageData } = ig;
+        const { entryData, additionalData, pageData } = ig;
 
-        const postData = entryData.PostPage?.[0]?.graphql;
+        const postData = entryData.PostPage?.[0]?.graphql
+            ?? additionalData?.graphql;
 
         if (postData?.shortcode_media) {
             const timeline = this.getCommentsFromGraphQL(postData);
