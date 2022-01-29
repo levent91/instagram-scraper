@@ -36,7 +36,8 @@ const Apify = require('apify');
  *         hasNextPage: boolean,
  *         ids: { [id: string]: boolean },
  *         reachedLastPostDate: boolean,
- *         allDuplicates: boolean
+ *         allDuplicates: boolean,
+ *         reachedLimit: boolean,
  *      }
  *   },
  *   extendOutputFunction: (data: any, meta: any) => Promise<void>,

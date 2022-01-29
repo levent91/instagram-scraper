@@ -4,7 +4,7 @@
     "buildTag": "latest",
     "env": {
         "npm_config_loglevel": "silent",
-        "ASBD": "437806",
+        "ASBD": "198387",
         "APP_ID": "936619743392459"
     },
     "template": "puppeteer_crawler"

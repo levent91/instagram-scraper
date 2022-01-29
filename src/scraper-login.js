@@ -243,7 +243,7 @@ class LoginScraper extends PublicScraper {
 
         try {
             await control.run([
-                defer.promise,
+                defer.considerHandled(),
                 (async () => {
                     while (state.hasNextPage && !defer.resolved) {
                         const ret = await this.finiteScroll(
@@ -729,7 +729,7 @@ class LoginScraper extends PublicScraper {
             // non moving scrollHeight usually means the tab is in the background and
             // the page interaction isn't working
             await control.run([
-                defer.promise,
+                defer.considerHandled(),
                 (async () => {
                     while (state.hasNextPage && !defer.resolved) {
                         const ret = await this.finiteScroll(

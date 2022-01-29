@@ -583,6 +583,7 @@ class BaseScraper extends Apify.PuppeteerCrawler {
             const newState = {
                 hasNextPage: true,
                 allDuplicates: false,
+                reachedLimit: false,
                 reachedLastPostDate: false,
                 ids: {},
             };
@@ -614,6 +615,10 @@ class BaseScraper extends Apify.PuppeteerCrawler {
         const parsedItems = parsingFn(items, currentCount());
         let itemsPushed = 0;
 
+        if (state.reachedLimit) {
+            return currentCount();
+        }
+
         const isAllOutOfTimeRange = parsedItems.every(({ timestamp }) => {
             return (minMaxDate.minDate?.isAfter(timestamp) === true)
                 || (minMaxDate.maxDate?.isBefore(timestamp) === true);
@@ -621,14 +626,18 @@ class BaseScraper extends Apify.PuppeteerCrawler {
 
         for (const item of parsedItems) {
             if (currentCount() >= resultsLimit) {
-                log.info(`Reached user provided limit of ${resultsLimit} results, stopping...`);
+                state.reachedLimit = true;
+                break;
+            }
+
+            if (state.reachedLimit) {
                 break;
             }
 
             if ((!minMaxDate?.maxDate && !minMaxDate?.minDate) || minMaxDate.compare(item.timestamp)) {
                 if (item.id) {
                     if (!state.ids[item.id]) {
-                        await outputFn(item);
+                        await outputFn(item); // avoid racing condition here scraping the same profile
                         itemsPushed++;
                         state.ids[item.id] = true;
                     }
@@ -636,6 +645,12 @@ class BaseScraper extends Apify.PuppeteerCrawler {
                     throw new Error(`Missing item id`);
                 }
             }
+        }
+
+        state.reachedLimit = state.reachedLimit || currentCount() >= resultsLimit;
+
+        if (state.reachedLimit) {
+            log.info(`Reached user provided limit of ${resultsLimit} results, stopping...`);
         }
 
         if (isAllOutOfTimeRange && currentCount() > 0) {

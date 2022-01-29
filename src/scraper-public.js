@@ -456,7 +456,7 @@ class PublicScraper extends BaseScraper {
             control.postpone();
 
             await control.run([
-                defer.promise,
+                defer.considerHandled(),
                 (async () => {
                     while (state.hasNextPage && !defer.resolved) {
                         const ret = await this.finiteScroll(

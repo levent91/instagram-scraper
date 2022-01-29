@@ -101,6 +101,8 @@ const deferred = () => {
     /** @type {(err?: Error) => void} */
     let reject = () => {};
     let resolved = false;
+    let handled = false;
+    let bail = 100;
     const promise = new Promise((_resolve, _reject) => {
         resolve = (val) => {
             if (!resolved) {
@@ -113,14 +115,33 @@ const deferred = () => {
         reject = (err) => {
             if (!resolved) {
                 resolved = true;
-                setTimeout(() => {
+                const isHandled = () => {
+                    if (!handled) {
+                        bail--;
+                        // this is needed because of page.on('response') racing condition
+                        // if the emitter, that is synchronous, throws before we await/catch the promise
+                        // the whole program crashes.
+                        // On the other hand, it will make a promise that will never finish in rare cases,
+                        // considerHandled() should always be raced against a timeout or something
+                        if (bail > 0) {
+                            setTimeout(isHandled, 100);
+                        } else {
+                            log.debug(`Promise was not handled in time`);
+                        }
+                        return;
+                    }
                     _reject(err);
-                });
+                };
+                setTimeout(isHandled);
             }
         };
     });
     return {
         promise,
+        considerHandled() {
+            handled = true;
+            return promise;
+        },
         get resolved() {
             return resolved;
         },
@@ -279,6 +300,10 @@ const acceptCookiesDialog = async (page) => {
  * @param {string} logPrefix
  */
 const finiteQuery = async (hash, variables, nodeTransformationFunc, limit, page, logPrefix) => {
+    if (!limit) {
+        return [];
+    }
+
     log.info(`${logPrefix} - Loading up to ${limit} items`);
 
     let hasNextPage = true;
