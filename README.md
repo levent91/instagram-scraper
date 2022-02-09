@@ -10,7 +10,7 @@ The Instagram data scraper supports the following features:
 - Scrape places/locations - query places matched by search keyword - you can either scrape posts or scrape metadata from each place (scrolling for more posts in places/locations is only possible when logged in)
 - Scrape comments - you can scrape comments from any post
 - Scrape likes - you can scrape likes from any post (if logged in)
-
+ 
 ## Just want to scrape Instagram hashtags, profiles, posts, or comments?
 Use our super fast and easy dedicated scrapers if you want to scrape specific Instagram data. Fewer settings to change and faster results. Just enter one or more Instagram usernames or URLs and click to scrape.
 
@@ -36,6 +36,9 @@ If you want more ideas, check out our [industries pages](https://apify.com/indus
 
 ## Tutorial
 If you want to know more about how Instagram Scraper works, here's a detailed explanation and [step-by-step guide](https://blog.apify.com/scrape-instagram-posts-comments-and-more-21d05506aeb3/) with screenshots and examples.
+
+## Is it legal to scrape Instagram?
+Our Instagram scrapers are ethical and do not extract any private user data, such as email addresses, gender, or location. They only extract what the user has chosen to share publicly. We therefore believe that our scrapers, when used for ethical purposes by Apify users, are safe. However, you should be aware that your results could contain personal data. Personal data is protected by the [GDPR](https://en.wikipedia.org/wiki/General_Data_Protection_Regulation) in the European Union and by other regulations around the world. You should not scrape personal data unless you have a legitimate reason to do so. If you're unsure whether your reason is legitimate, consult your lawyers. You can also read our blog post on the [legality of web scraping](https://blog.apify.com/is-web-scraping-legal/).
 
 ## Cost of usage
 There are two main factors to take into account if you want to run Instagram Scraper on the Apify platform:
