@@ -4,7 +4,7 @@
     "description": "Crawls through instagram pages and stores posts, comments and details",
     "main": "main.js",
     "dependencies": {
-        "apify": "^2.2.1",
+        "apify": "^2.2.2",
         "got-scraping": "^3.2.8",
         "delayable-idle-abort-promise": "^1.0.0",
         "moment": "^2.29.1",
@@ -24,6 +24,6 @@
     "homepage": "https://github.com/gippy/instagram-scraper",
     "devDependencies": {
         "@apify/eslint-config": "^0.2.2",
-        "eslint": "^8.6.0"
+        "eslint": "^8.10.0"
     }
 }

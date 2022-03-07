@@ -121,8 +121,6 @@ class LoginScraper extends PublicScraper {
                 timeline.comments,
                 pageData.id,
                 (items, position) => {
-                    log.info(`${this.logLabel(context, ig)} ${items.length} comments loaded, ${Object.keys(state.ids).length}/${timeline.commentsCount} comments scraped`);
-
                     return isGraphQL
                         ? super.parseCommentsForOutput(items, pageData, position)
                         : this.parseCommentsForOutput(items, pageData, position);
@@ -134,6 +132,10 @@ class LoginScraper extends PublicScraper {
                         ig,
                         label: 'comment',
                     });
+                },
+                {
+                    label: this.logLabel(context, ig),
+                    total: timeline.commentsCount,
                 },
             );
         };
@@ -574,8 +576,6 @@ class LoginScraper extends PublicScraper {
                 timeline.posts,
                 pageData.id,
                 (items, position) => {
-                    log.info(`${this.logLabel(context, ig)} ${items.length} posts loaded, ${Object.keys(state.ids).length}/${timeline.postsCount} posts scraped`);
-
                     return outputFn(items, position);
                 },
                 async (item) => {
@@ -585,6 +585,10 @@ class LoginScraper extends PublicScraper {
                         ig,
                         label: 'post',
                     });
+                },
+                {
+                    label: this.logLabel(context, ig),
+                    total: timeline.postsCount,
                 },
             );
         };

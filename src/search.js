@@ -31,6 +31,7 @@ const formatHashtagResult = (item) => {
  */
 const searchUrls = async (input, request) => {
     const { search, searchType, searchLimit = 10 } = input;
+
     if (!search) return [];
 
     try {
@@ -45,10 +46,9 @@ const searchUrls = async (input, request) => {
         throw new Error('Run aborted');
     }
 
-    /** @type {string[]} */
-    const totalUrls = [];
-
     const searchTerms = new Set(search.split(',').map((s) => s.trim()).filter(Boolean));
+    /** @type {Array<{ url: string, searchTerm: string, searchType: string }>} */
+    const outUrls = [];
 
     for (const searchTerm of searchTerms) {
         log.info(`Searching for "${searchTerm}"`);
@@ -91,10 +91,13 @@ const searchUrls = async (input, request) => {
         else if (searchType === SEARCH_TYPES.HASHTAG) urls = body.hashtags.map(formatHashtagResult);
 
         log.info(`Found ${urls.length} search results for "${searchTerm}". Limiting to ${searchLimit}.`);
-        totalUrls.push(...urls.slice(0, searchLimit));
+
+        for (const url of urls.slice(0, searchLimit)) {
+            outUrls.push({ url, searchTerm, searchType });
+        }
     }
 
-    return totalUrls;
+    return outUrls;
 };
 
 /**

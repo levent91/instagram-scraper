@@ -84,24 +84,35 @@ Apify.main(async () => {
         }) : proxyConfiguration,
     });
 
-    /** @type {string[]} */
-    let urls = [];
+    /** @type {Apify.RequestOptions[]} */
+    let requestListSources = [];
 
     if (Array.isArray(directUrls) && directUrls.length > 0) {
         log.warning('Search is disabled when Direct URLs are used');
-        urls = directUrls;
+
+        requestListSources = directUrls.map((url) => ({
+            url,
+            userData: {
+                pageType: getPageTypeFromUrl(url),
+            },
+        }));
     } else {
         // don't search when doing cookies
-        urls = await searchUrls(input, doRequest);
-    }
+        const searchResults = await searchUrls(input, doRequest);
 
-    const requestListSources = urls.map((url) => ({
-        url,
-        userData: {
-            // TODO: This should be the only page type we ever need, remove the one from entryData
-            pageType: getPageTypeFromUrl(url),
-        },
-    }));
+        requestListSources = searchResults.map(({ searchTerm, searchType, url }) => {
+            const pageType = getPageTypeFromUrl(url);
+
+            return {
+                url,
+                userData: {
+                    searchTerm,
+                    searchType,
+                    pageType,
+                },
+            };
+        });
+    }
 
     if (requestListSources.length === 0) {
         throw new Error('No URLs to process');
@@ -150,6 +161,10 @@ Apify.main(async () => {
                 : true;
         },
         output: async (data, { context, ig }) => {
+            if (!data) {
+                return;
+            }
+
             const { crawler } = context;
             await Apify.pushData(crawler.setDebugData(context, ig, data));
         },

@@ -412,6 +412,10 @@ class BaseScraper extends Apify.PuppeteerCrawler {
         const { page } = context;
         const { pageData } = ig;
 
+        if (!followingLimit) {
+            return [];
+        }
+
         log.info(`Loading users current profile follows (limit ${followingLimit} items).`);
 
         /**
@@ -461,6 +465,10 @@ class BaseScraper extends Apify.PuppeteerCrawler {
         const { followedByLimit } = this.options.input;
         const { page } = context;
         const { pageData } = ig;
+
+        if (!followedByLimit) {
+            return [];
+        }
 
         log.info(`Loading users current profile followers (limit ${followedByLimit} items).`);
 
@@ -599,13 +607,14 @@ class BaseScraper extends Apify.PuppeteerCrawler {
      * @param {string} id
      * @param {(items: any[], position: number) => any[]} parsingFn
      * @param {(item: any) => Promise<void>} outputFn
+     * @param {{ total: number | null, label: string }} info
      */
-    async filterPushedItemsAndUpdateState(items, id, parsingFn, outputFn) {
+    async filterPushedItemsAndUpdateState(items, id, parsingFn, outputFn, info = { label: 'results', total: null }) {
         const { minMaxDate, input: { resultsLimit = 0 } } = this.options;
 
         const state = this.initScrollingState(id);
 
-        if (!resultsLimit || !items?.length) {
+        if (!resultsLimit || !items?.length || state.reachedLimit) {
             return 0;
         }
 
@@ -614,10 +623,6 @@ class BaseScraper extends Apify.PuppeteerCrawler {
         const currentCount = () => Object.keys(state.ids).length;
         const parsedItems = parsingFn(items, currentCount());
         let itemsPushed = 0;
-
-        if (state.reachedLimit) {
-            return currentCount();
-        }
 
         const isAllOutOfTimeRange = parsedItems.every(({ timestamp }) => {
             return (minMaxDate.minDate?.isAfter(timestamp) === true)
@@ -648,6 +653,10 @@ class BaseScraper extends Apify.PuppeteerCrawler {
         }
 
         state.reachedLimit = state.reachedLimit || currentCount() >= resultsLimit;
+
+        if (info?.label && info?.total) {
+            log.info(`${info.label} ${items.length} items loaded, ${currentCount()}/${info.total} items scraped`);
+        }
 
         if (state.reachedLimit) {
             log.info(`Reached user provided limit of ${resultsLimit} results, stopping...`);
@@ -824,7 +833,7 @@ class BaseScraper extends Apify.PuppeteerCrawler {
         log.debug(`current state`, state);
 
         if (reachedLimit) {
-            log.warning(`Reached max ${type} limit: ${resultsLimit}. Finishing scrolling...`);
+            log.info(`Reached max ${type} limit: ${resultsLimit}. Finishing scrolling...`);
             return false;
         }
 

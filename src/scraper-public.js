@@ -176,7 +176,6 @@ class PublicScraper extends BaseScraper {
 
         if (postData?.shortcode_media) {
             const timeline = this.getCommentsFromGraphQL(postData);
-            const state = this.initScrollingState(pageData.id);
 
             // Public comments are preloaded on page load and can't be iterated
             await this.filterPushedItemsAndUpdateState(
@@ -184,8 +183,6 @@ class PublicScraper extends BaseScraper {
                 pageData.id,
                 (comments, position) => {
                     const result = this.parseCommentsForOutput(comments, pageData, position);
-
-                    log.info(`${this.logLabel(context, ig)} ${comments.length} comments loaded, ${Object.keys(state.ids).length}/${timeline.commentsCount} comments scraped`);
 
                     return result;
                 },
@@ -195,6 +192,10 @@ class PublicScraper extends BaseScraper {
                         ig,
                         label: 'comment',
                     });
+                },
+                {
+                    label: this.logLabel(context, ig),
+                    total: timeline.commentsCount,
                 },
             );
         }
@@ -318,8 +319,6 @@ class PublicScraper extends BaseScraper {
                 timeline.posts,
                 pageData.id,
                 (items, position) => {
-                    log.info(`${this.logLabel(context, ig)} ${items.length} posts loaded, ${Object.keys(state.ids).length}/${timeline.postsCount} posts scraped`);
-
                     return this.parsePostsForOutput(items, pageData, position);
                 },
                 async (item) => {
@@ -329,6 +328,10 @@ class PublicScraper extends BaseScraper {
                         ig,
                         label: 'post',
                     });
+                },
+                {
+                    label: this.logLabel(context, ig),
+                    total: timeline.postsCount,
                 },
             );
         };

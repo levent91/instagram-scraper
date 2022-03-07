@@ -1,3 +1,12 @@
+### 2022-03-07
+
+Feature:
+- Add searchTerm and type to the debug output
+- Update SDK version
+
+Fix:
+- Log for followers/following
+
 ### 2022-01-06
 
 Features:
