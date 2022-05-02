@@ -1,13 +1,13 @@
 {
     "name": "instagram-scraper",
-    "version": "0.0.1",
+    "version": "0.1.0",
     "description": "Crawls through instagram pages and stores posts, comments and details",
     "main": "main.js",
     "dependencies": {
-        "apify": "^2.2.2",
-        "got-scraping": "^3.2.8",
+        "apify": "^2.3.0",
+        "got-scraping": "^3.2.9",
         "delayable-idle-abort-promise": "^1.0.0",
-        "moment": "^2.29.1",
+        "moment": "^2.29.3",
         "puppeteer": "*"
     },
     "scripts": {
@@ -23,7 +23,8 @@
     "license": "ISC",
     "homepage": "https://github.com/gippy/instagram-scraper",
     "devDependencies": {
-        "@apify/eslint-config": "^0.2.2",
-        "eslint": "^8.10.0"
+        "@apify/eslint-config": "^0.3.1",
+        "eslint": "^8.13.0",
+        "eslint-plugin-node": "^11.1.0"
     }
 }

@@ -1,14 +1,15 @@
 {
-    "extends": "@apify",
-    "env": {
-        "node": true
-    },
+    "extends": [
+        "plugin:node/recommended",
+        "@apify"
+    ],
     "parserOptions": {
-        "ecmaVersion": 2020
+        "ecmaVersion": 2021
     },
     "rules": {
         "camelcase": 0,
         "max-len": 0,
+        "import/extensions": [2, "always"],
         "no-underscore-dangle": 1,
         "no-empty": 1,
         "no-unused-vars": 1

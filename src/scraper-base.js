@@ -80,27 +80,35 @@ class BaseScraper extends Apify.PuppeteerCrawler {
             maxRequestRetries: options.input.maxRequestRetries,
             launchContext: {
                 useIncognitoPages: true,
+                useChrome: true,
+                stealth: false,
+                launchOptions: {
+                    headless: !rest.input.debugLog,
+                    devtools: rest.input.debugLog,
+                }
             },
             browserPoolOptions: {
                 maxOpenPagesPerBrowser: 1,
+                retireBrowserAfterPageCount: 1,
                 useFingerprints: true,
-                preLaunchHooks: [async (pageId, launchContext) => {
-                    const { request } = this.crawlingContexts.get(pageId);
+                fingerprintsOptions: {
+                    fingerprintGeneratorOptions: {
+                        devices: ['desktop'],
+                    }
+                },
+                // preLaunchHooks: [async (pageId, launchContext) => {
+                //     const { request } = this.crawlingContexts.get(pageId);
 
-                    const locale = new URL(request.url).searchParams.get('hl');
+                //     const locale = new URL(request.url).searchParams.get('hl');
 
-                    launchContext.launchOptions = {
-                        ...launchContext.launchOptions,
-                        bypassCSP: true,
-                        ignoreHTTPSErrors: true,
-                        devtools: rest.input.debugLog,
-                        locale,
-                    };
-                }],
+                //     console.log(launchContext);
+                // }],
                 postPageCloseHooks: [async (pageId, browserController) => {
                     if (browserController?.launchContext?.session?.isUsable() === false) {
                         log.debug('Session not usable, closing browser');
-                        await browserController.close();
+                        try {
+                            await browserController.close();
+                        } catch (e) {}
                     }
                 }],
             },
@@ -806,7 +814,7 @@ class BaseScraper extends Apify.PuppeteerCrawler {
                 ]);
 
                 if (!scrolled[1]) {
-                    if (tries > 1 && state.hasNextPage) {
+                    if (tries > 3 && state.hasNextPage) {
                         throw new Error('No response scrolling for 2s');
                     }
                 } else {

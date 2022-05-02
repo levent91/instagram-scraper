@@ -282,9 +282,11 @@ const acceptCookiesDialog = async (page) => {
         return false;
     }
 
+    const [allowBtn] = await page.$x('//button[contains(., "cookie") and contains(., "Only")]');
+
     await Promise.all([
         page.waitForResponse(() => true),
-        page.click(acceptBtn),
+        allowBtn.click(),
     ]);
 
     return true;

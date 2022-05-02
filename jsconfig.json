@@ -1,21 +1,15 @@
 {
     "compilerOptions": {
-        "target": "es2020",
-        "module": "commonJS",
+        "allowSyntheticDefaultImports": false,
+        "alwaysStrict": true,
         "strict": true,
+        "strictNullChecks": false,
+        "noImplicitAny": true,
         "checkJs": true,
-        "noUnusedLocals": true,
-        "noImplicitThis": true,
-        "lib": [
-            "dom",
-            "dom.iterable",
-            "es2020.promise",
-            "es2015",
-            "es2016",
-            "es2019.array",
-            "es2020.string"
-        ],
-        "noUnusedParameters": true
+        "esModuleInterop": false,
+        "target": "es2021",
+        "module": "CommonJS",
+        "moduleResolution": "node"
     },
     "include": [
         "./src/*.js"
