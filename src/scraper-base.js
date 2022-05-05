@@ -85,7 +85,7 @@ class BaseScraper extends Apify.PuppeteerCrawler {
                 launchOptions: {
                     headless: !rest.input.debugLog,
                     devtools: rest.input.debugLog,
-                }
+                },
             },
             browserPoolOptions: {
                 maxOpenPagesPerBrowser: 1,
@@ -94,7 +94,7 @@ class BaseScraper extends Apify.PuppeteerCrawler {
                 fingerprintsOptions: {
                     fingerprintGeneratorOptions: {
                         devices: ['desktop'],
-                    }
+                    },
                 },
                 // preLaunchHooks: [async (pageId, launchContext) => {
                 //     const { request } = this.crawlingContexts.get(pageId);
@@ -536,7 +536,6 @@ class BaseScraper extends Apify.PuppeteerCrawler {
         const transformedPosts = [];
         for (let i = 0; i < posts.length; i++) {
             if (posts[i]?.owner?.username) {
-                // eslint-disable-next-line no-continue
                 continue;
             }
 
@@ -547,7 +546,7 @@ class BaseScraper extends Apify.PuppeteerCrawler {
             if (!ownerId) {
                 log.debug('No ownerId', posts[i]);
                 transformedPosts.push(posts[i]);
-                // eslint-disable-next-line no-continue
+
                 continue;
             }
 
@@ -557,7 +556,7 @@ class BaseScraper extends Apify.PuppeteerCrawler {
                 newPost.ownerUsername = this.users.get(ownerId).username;
                 newPost.owner = this.users.get(ownerId);
                 transformedPosts.push(newPost);
-                // eslint-disable-next-line no-continue
+
                 continue;
             }
 
