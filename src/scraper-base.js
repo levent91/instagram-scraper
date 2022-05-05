@@ -92,6 +92,7 @@ class BaseScraper extends Apify.PuppeteerCrawler {
                 retireBrowserAfterPageCount: 1,
                 useFingerprints: true,
                 fingerprintsOptions: {
+                    useFingerprintPerProxyCache: false,
                     fingerprintGeneratorOptions: {
                         devices: ['desktop'],
                     },
