@@ -80,8 +80,6 @@ class BaseScraper extends Apify.PuppeteerCrawler {
             maxRequestRetries: options.input.maxRequestRetries,
             launchContext: {
                 useIncognitoPages: true,
-                useChrome: true,
-                stealth: false,
                 launchOptions: {
                     headless: !rest.input.debugLog,
                     devtools: rest.input.debugLog,
