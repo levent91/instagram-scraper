@@ -20,6 +20,20 @@ const { log } = Apify.utils;
 Apify.main(async () => {
     /** @type {any} */
     const input = await Apify.getInput();
+
+    // login cookies can be array of objects (single cookies) or array of arrays of objects (multiple cookies)
+    if (input.loginCookies?.length > 0) {
+        log.warning(`Input contains full loginCookies. This causes problems with login. Will use only the sessionid cookie`);
+        // 2022-06-02: Seems Instagram stopped working with all cookies, we must use only sessionid cookies
+        if (Array.isArray(input.loginCookies[0])) {
+            input.loginCookies = input.loginCookies.map((cookies) =>
+                cookies.filter((cookie) => cookie.name === 'sessionid'),
+            );
+        } else {
+            input.loginCookies = input.loginCookies.filter((cookie) => cookie.name === 'sessionid');
+        }
+    }
+
     const {
         proxy,
         resultsType = 'posts',
