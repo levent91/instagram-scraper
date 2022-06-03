@@ -1,3 +1,7 @@
+### 2022-06-03
+Fix:
+- `loginCookies` now use only a single cookie with name `sessionid`. All other cookies are now removed. This improves reliability of scraping behind login.
+
 ### 2022-03-07
 
 Feature:
