@@ -75,7 +75,7 @@
             "description": "Scrapes post from the current date until it reaches a post older than the provided date. The date should be in YYYY-MM-DD format or relative time, e.g. today. By default it scrapes all posts.",
             "editor": "hidden",
             "sectionCaption": "Time frame",
-            "sectionDescription": "Use this if you only want to scrape posts or comments from a specific period of time."
+            "sectionDescription": "Use this if you only want to scrape posts or comments from a specific period of time. Note: As the usage of dates means scrolling of the page (without returning any results), it's better to use only recent dates."
         },
         "fromDate": {
             "title": "Scrape from date",

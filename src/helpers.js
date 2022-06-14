@@ -699,11 +699,14 @@ const parseTimeUnit = (value) => {
  * @param {MinMax} param
  */
 const minMaxDates = ({ min, max }) => {
-    const minDate = parseTimeUnit(min);
-    const maxDate = parseTimeUnit(max);
+    let minDate = parseTimeUnit(min);
+    let maxDate = parseTimeUnit(max);
 
     if (minDate && maxDate && maxDate.diff(minDate) < 0) {
-        throw new Error(`Minimum date ${minDate.toISOString()} needs to be less than max date ${maxDate.toISOString()}`);
+        log.warning(`Minimum date ( ${minDate.toString()} ) needs to be less than max date ( ${maxDate.toString()} ). Swapping input dates.`);
+        const minDateValue = minDate;
+        minDate = maxDate;
+        maxDate = minDateValue;
     }
 
     return {
