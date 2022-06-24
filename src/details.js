@@ -25,6 +25,7 @@ const formatIGTVVideo = (edge) => {
         likesCount: node.edge_liked_by ? node.edge_liked_by.count : null,
         videoDuration: node.video_duration || 0,
         videoViewCount: node.video_view_count,
+        videoPlayCount: node.video_play_count,
     };
 };
 
