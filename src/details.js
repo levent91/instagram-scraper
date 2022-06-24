@@ -25,6 +25,7 @@ const formatIGTVVideo = (edge) => {
         likesCount: node.edge_liked_by ? node.edge_liked_by.count : null,
         videoDuration: node.video_duration || 0,
         videoViewCount: node.video_view_count,
+        videoPlayCount: node.video_play_count,
     };
 };
 
@@ -91,6 +92,7 @@ const formatSinglePost = (node) => {
         alt: node.accessibility_caption,
         likesCount: likes?.count ?? null,
         videoViewCount: node.video_view_count,
+        videoPlayCount: node.video_play_count,
         timestamp: secondsToDate(node.taken_at_timestamp),
         childPosts: node.edge_sidecar_to_children?.edges?.map?.((child) => formatSinglePost(child.node)) ?? [],
         locationName: node.location?.name ?? null,
