@@ -39,7 +39,9 @@ class PublicScraper extends BaseScraper {
 
         const { entryData } = ig;
 
-        const data = entryData.ProfilePage[0].graphql.user;
+        // const data = entryData.ProfilePage[0].graphql.user;
+        // const data = entryData.config.viewer;
+        const data = context.request.userData?.jsonResponse?.data?.data?.user || entryData?.ProfilePage[0]?.graphql?.user;
 
         const result = {
             id: data.id,
@@ -78,8 +80,9 @@ class PublicScraper extends BaseScraper {
 
     /**
      * @param {consts.IGData} ig
+     * @param {Request} request
      */
-    getPageData(ig) {
+    getPageData(ig, request) {
         const { entryData, additionalData } = ig;
 
         if (entryData.LocationsPage) {
@@ -134,7 +137,7 @@ class PublicScraper extends BaseScraper {
             };
         }
 
-        return super.getPageData(ig);
+        return super.getPageData(ig, request);
     }
 
     /**
@@ -206,10 +209,12 @@ class PublicScraper extends BaseScraper {
      * @param {consts.IGData} ig
      */
     async formatPostOutput(context, ig) {
+        const { request: { userData } } = context;
         const likedBy = await this.getPostLikes(context, ig);
         const { entryData, additionalData } = ig;
 
-        const data = entryData?.PostPage?.[0]?.graphql?.shortcode_media
+
+        const data = userData.jsonResponse?.data?.data?.shortcode_media ?? entryData?.PostPage?.[0]?.graphql?.shortcode_media
             ?? additionalData?.graphql?.shortcode_media;
 
         return {
@@ -315,8 +320,10 @@ class PublicScraper extends BaseScraper {
          * @param {Puppeteer.HTTPResponse} [response]
          */
         const pushPosts = (timeline, response = undefined) => {
+            timeline = pageData.edge_owner_to_timeline_media.edges;
             return this.filterPushedItemsAndUpdateState(
-                timeline.posts,
+                // timeline.posts,
+                timeline.edges || timeline.posts,
                 pageData.id,
                 (items, position) => {
                     return this.parsePostsForOutput(items, pageData, position);

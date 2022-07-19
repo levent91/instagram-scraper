@@ -20,6 +20,7 @@ const {
     },
 } = consts;
 const errors = require('./errors');
+const { Request } = require('apify');
 
 const { sleep, log } = Apify.utils;
 
@@ -59,7 +60,7 @@ class BaseScraper extends Apify.PuppeteerCrawler {
                 }
             }],
             preNavigationHooks: [async ({ request, page }, gotoOptions) => {
-                gotoOptions.waitUntil = 'domcontentloaded';
+                gotoOptions.waitUntil = 'networkidle2';
 
                 await page.setBypassCSP(true);
 
@@ -88,7 +89,7 @@ class BaseScraper extends Apify.PuppeteerCrawler {
             browserPoolOptions: {
                 maxOpenPagesPerBrowser: 1,
                 retireBrowserAfterPageCount: 1,
-                useFingerprints: true,
+                useFingerprints: rest.input?.loginCookies?.length ? false : true,
                 fingerprintsOptions: {
                     useFingerprintPerProxyCache: false,
                     fingerprintGeneratorOptions: {
@@ -113,7 +114,16 @@ class BaseScraper extends Apify.PuppeteerCrawler {
             },
             proxyConfiguration: options.proxyConfiguration,
             handlePageTimeoutSecs: 300 * 60, // Ex: 5 hours to crawl thousands of comments
-            handlePageFunction: (context) => {
+            handlePageFunction: async (context) => {
+                const { request: { userData }, page } = context;
+                if (userData?.jsonResponse?.error && userData?.jsonResponse.code !== 200) {
+                    throw new Error(userData.jsonResponse.error);
+                }
+                if (userData?.jsonResponse?.error && userData?.jsonResponse.code === 200) {
+                    // you can add a static wait here if you can't retrieve the details data
+                    // sometimes we need to wait longer to get the response
+                    await page.waitForTimeout(3000);
+                }
                 return this.defaultHandler(context); // don't lose 'this' context, but don't bind uselessly
             },
             handleFailedRequestFunction: async ({ request, error }) => {
@@ -185,7 +195,7 @@ class BaseScraper extends Apify.PuppeteerCrawler {
             throw errors.redirectedToLogin();
         }
 
-        const pageData = this.getPageData({ entryData, additionalData });
+        const pageData = this.getPageData({ entryData, additionalData }, request)
 
         const { pageType } = pageData;
 
@@ -212,7 +222,7 @@ class BaseScraper extends Apify.PuppeteerCrawler {
         const igData = {
             additionalData,
             entryData,
-            pageData,
+            pageData: pageData || { pageType },
         };
 
         try {
@@ -331,8 +341,9 @@ class BaseScraper extends Apify.PuppeteerCrawler {
 
     /**
      * @param {consts.IGData} data
+     * @param {Request} request
      */
-    getPageData(data) {
+    getPageData(data, request) {
         const { entryData } = data;
 
         if (entryData.Challenge) {
@@ -353,8 +364,13 @@ class BaseScraper extends Apify.PuppeteerCrawler {
             };
         }
 
-        log.info('unsupported page', entryData);
+        if (request.userData.pageType) {
+            return {
+                pageType: request.userData.pageType,
+            };
+        }
 
+        log.info('unsupported page', entryData);
         throw errors.unsupportedPage();
     }
 
@@ -617,7 +633,6 @@ class BaseScraper extends Apify.PuppeteerCrawler {
      */
     async filterPushedItemsAndUpdateState(items, id, parsingFn, outputFn, info = { label: 'results', total: null }) {
         const { minMaxDate, input: { resultsLimit = 0 } } = this.options;
-
         const state = this.initScrollingState(id);
 
         if (!resultsLimit || !items?.length || state.reachedLimit) {
@@ -628,6 +643,7 @@ class BaseScraper extends Apify.PuppeteerCrawler {
 
         const currentCount = () => Object.keys(state.ids).length;
         const parsedItems = parsingFn(items, currentCount());
+
         let itemsPushed = 0;
 
         const isAllOutOfTimeRange = parsedItems.every(({ timestamp }) => {
@@ -706,11 +722,10 @@ class BaseScraper extends Apify.PuppeteerCrawler {
      * @returns {Promise<boolean>} Returns false when it shouldn't loop anymore
      */
     async finiteScroll(context, ig, type) {
-        const { page } = context;
+        const { page, request } = context;
         const { pageData } = ig;
         const { input: { resultsLimit = 0 } } = this.options;
-
-        const state = this.initScrollingState(pageData.id);
+        const state = this.initScrollingState(request.userData?.jsonResponse?.data?.data?.user?.id || pageData.id);
 
         if (!resultsLimit) {
             return false;
@@ -804,7 +819,6 @@ class BaseScraper extends Apify.PuppeteerCrawler {
          */
         if (type === 'posts') {
             let tries = 0;
-
             while (tries++ < 10) {
                 const scrolled = await Promise.all([
                     page.evaluate(() => window.scrollTo(0, document.body.scrollHeight)),
@@ -963,7 +977,7 @@ class BaseScraper extends Apify.PuppeteerCrawler {
                 case PAGE_TYPES.PLACE:
                     return data?.location?.edge_location_to_media;
                 case PAGE_TYPES.PROFILE:
-                    return data?.user?.edge_owner_to_timeline_media;
+                    return data?.data?.user?.edge_owner_to_timeline_media || data?.user?.edge_owner_to_timeline_media;
                 case PAGE_TYPES.HASHTAG:
                     return data?.hashtag?.edge_hashtag_to_media;
                 default:
@@ -973,11 +987,12 @@ class BaseScraper extends Apify.PuppeteerCrawler {
 
         /** @type {any[]} */
         const postItems = timeline?.edges ?? [];
+
         /** @type {boolean} */
         const hasNextPage = timeline?.page_info?.has_next_page ?? false;
         /** @type {number} */
-        const postsCount = timeline?.count ?? postItems.length;
 
+        const postsCount = timeline?.count ?? postItems.length;
         return {
             posts: postItems,
             hasNextPage,
@@ -993,7 +1008,6 @@ class BaseScraper extends Apify.PuppeteerCrawler {
     parsePostsForOutput(posts, pageData, currentScrollingPosition) {
         return posts.map((item, index) => {
             const post = formatSinglePost(item.node);
-
             return {
                 queryTag: pageData.tagName,
                 queryUsername: pageData.userUsername,

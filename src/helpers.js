@@ -37,13 +37,13 @@ const getEntryData = async (page) => {
     try {
         await page.waitForFunction(() => {
             // eslint-disable-next-line no-underscore-dangle
-            return (window?.__initialData?.pending === false && !!(window?.__initialData?.data?.entry_data));
+            return (window?._sharedData);
         }, { timeout: 30000 });
     } catch (e) {
         throw new Error('Page took too long to load initial data, trying again.');
     }
 
-    return page.evaluate(() => window.__initialData.data.entry_data);
+    return page.evaluate(() => window?._sharedData);
 };
 
 /**
@@ -768,6 +768,25 @@ const edgesToText = (arr) => {
         .filter(Boolean);
 };
 
+/**
+ * Handles the response from page.on('response', ...)
+ * @param { Puppeteer.HTTPResponse } response
+ * @returns
+ */
+
+const handleResponse = async (response) => {
+    const responseObject = {
+        code: 0,
+    };
+    try {
+        responseObject.code = await response.status();
+        responseObject.data = await response.json();
+    } catch (e) {
+        responseObject.error = e;
+    }
+    return responseObject;
+};
+
 module.exports = {
     getPageTypeFromUrl,
     getCheckedVariable,
@@ -796,4 +815,5 @@ module.exports = {
     arrayNodes,
     edgesToText,
     secondsToDate,
+    handleResponse,
 };
