@@ -62,6 +62,27 @@ class BaseScraper extends Apify.PuppeteerCrawler {
             preNavigationHooks: [async ({ request, page }, gotoOptions) => {
                 gotoOptions.waitUntil = 'networkidle2';
 
+                await page.on('response', async (response) => {
+                    try {
+                        if (response.url().includes('?content_type')) {
+                            if (!request.userData.jsonResponse) request.userData.jsonResponse = {};
+                            request.userData.jsonResponse.contentType = await response.url().match('=(.*)&')[1];
+                        }
+                        if (response.url().includes('?username')) {
+                            if (!request.userData.jsonResponse) request.userData.jsonResponse = {};
+                            request.userData.jsonResponse = await helpers.handleResponse(response);
+                        }
+    
+                        if (response.url().includes('query_hash') && (request.userData?.jsonResponse?.data?.data?.user?.edge_owner_to_timeline_media.edges)) {
+                            if (!request.userData.jsonResponse) request.userData.jsonResponse = {};
+                            const graphRes = await helpers.handleResponse(response);
+                            request.userData.jsonResponse.data.data.user.edge_owner_to_timeline_media.edges = graphRes.data.data.user.edge_owner_to_timeline_media.edges;
+                        }
+                        // query_hash
+                    } catch (e) {
+                    }
+                });
+
                 await page.setBypassCSP(true);
 
                 await Apify.utils.puppeteer.blockRequests(page, {
