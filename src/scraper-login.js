@@ -9,6 +9,7 @@ const helpers = require('./helpers');
 const { loginManager } = require('./login');
 const consts = require('./consts');
 const errors = require('./errors');
+const { Request } = require('apify');
 
 const {
     V1_ENDPOINT,
@@ -32,20 +33,41 @@ class LoginScraper extends PublicScraper {
         this.logins = null;
 
         this.preNavigationHooks.push(async (context) => {
-            const { session, page } = context;
+            const { session, page, request } = context;
+
+            await page.on('response', async (response) => {
+                try {
+                    if (response.url().includes('?content_type')) {
+                        if (!request.userData.jsonResponse) request.userData.jsonResponse = {};
+                        request.userData.jsonResponse.contentType = await response.url().match('=(.*)&')[1];
+                    }
+                    if (response.url().includes('?username')) {
+                        if (!request.userData.jsonResponse) request.userData.jsonResponse = {};
+                        request.userData.jsonResponse = await helpers.handleResponse(response);
+                    }
+
+                    if (response.url().includes('query_hash') && (request.userData?.jsonResponse?.data?.data?.user?.edge_owner_to_timeline_media.edges)) {
+                        if (!request.userData.jsonResponse) request.userData.jsonResponse = {};
+                        const graphRes = await helpers.handleResponse(response);
+                        request.userData.jsonResponse.data.data.user.edge_owner_to_timeline_media.edges = graphRes.data.data.user.edge_owner_to_timeline_media.edges;
+                    }
+                    // query_hash
+                } catch (e) {
+                }
+            });
 
             await this.logins.setCookie(page, session);
         });
 
         this.postNavigationHooks.push(async (context) => {
-            const { page, session } = context;
+            const { page, session, request } = context;
             const { logins } = this;
 
             if (this.logins.hasSession(session)) {
                 try {
                     // takes a while to load on slower proxies
                     await page.waitForFunction(() => {
-                        return !!(window?._sharedData?.config?.viewerId);
+                        return !!(window?._sharedData.config.viewerId);
                     }, { timeout: 30000 });
 
                     const viewerId = await page.evaluate(() => window._sharedData.config.viewerId);
@@ -63,8 +85,8 @@ class LoginScraper extends PublicScraper {
                         logins.decreaseError(session);
                     }
                 } catch (loginError) {
-                    log.exception(loginError, 'Login failed');
-                    throw new Error('Page didn\'t load properly with login, retrying...');
+                    log.exception(loginError, 'session failed(l-error)');
+                    throw new Error('Page didn\'t load properly with input cookie, retrying...');
                 }
             }
         });
@@ -317,7 +339,7 @@ class LoginScraper extends PublicScraper {
             }
             case PAGE_TYPES.PROFILE:
                 return [
-                    this.getPostsFromGraphQL(pageType, entryData?.ProfilePage?.[0]?.graphql),
+                    this.getPostsFromGraphQL(pageType, context.request.userData?.jsonResponse?.data || entryData?.ProfilePage?.[0]?.graphql),
                 ];
             case PAGE_TYPES.HASHTAG: {
                 const data = entryData?.TagPage?.[0]?.data;
@@ -560,9 +582,13 @@ class LoginScraper extends PublicScraper {
         const { page, request } = context;
         const { extendOutputFunction, extendScraperFunction } = this.options;
 
-        const { pageData } = ig;
+        const cookieUser = request.userData?.jsonResponse?.data?.data?.user;
+
+        let { pageData } = ig;
 
         const { pageType } = pageData;
+
+        if (cookieUser) pageData = cookieUser;
 
         const state = this.initScrollingState(pageData.id);
 
@@ -572,8 +598,12 @@ class LoginScraper extends PublicScraper {
          * @param {Puppeteer.HTTPResponse} [response]
          */
         const pushPosts = (timeline, outputFn, response) => {
+            // todo: modify here
+            // overwriting this for new response
+            timeline = pageData.edge_owner_to_timeline_media;
             return this.filterPushedItemsAndUpdateState(
-                timeline.posts,
+                // timeline.posts,
+                timeline.edges,
                 pageData.id,
                 (items, position) => {
                     return outputFn(items, position);
@@ -903,8 +933,9 @@ class LoginScraper extends PublicScraper {
 
     /**
      * @param {consts.IGData} ig
+     * @param {Request} request
      */
-    getPageData(ig) {
+    getPageData(ig, request) {
         const { entryData, additionalData } = ig;
 
         if (entryData.LocationsPage) {
@@ -932,7 +963,7 @@ class LoginScraper extends PublicScraper {
             };
         }
 
-        if (entryData.ProfilePage) {
+        if (entryData.ProfilePage || request.userData.contentType === PAGE_TYPES.PROFILE) {
             const itemData = entryData.ProfilePage[0].graphql.user;
 
             return {
@@ -958,7 +989,7 @@ class LoginScraper extends PublicScraper {
                 };
             }
 
-            return super.getPageData(ig);
+            return super.getPageData(ig, request);
         }
 
         if (entryData.StoriesPage) {
@@ -972,7 +1003,7 @@ class LoginScraper extends PublicScraper {
             };
         }
 
-        return super.getPageData(ig);
+        return super.getPageData(ig, request);
     }
 
     async run() {
@@ -982,7 +1013,7 @@ class LoginScraper extends PublicScraper {
         });
 
         if (!this.logins.loginCount()) {
-            throw new Error('No login information found, aborting.');
+            throw new Error('No session information found, aborting.');
         }
 
         this.autoscaledPoolOptions.maxConcurrency = this.logins.loginCount();
