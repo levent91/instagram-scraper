@@ -18,6 +18,10 @@ const PublicScraper = require('./scraper-public');
 const { log } = Apify.utils;
 
 Apify.main(async () => {
+    throw `******\nINSTAGRAM SCRAPER DOESN'T WORK!\nInstagram changed layout of their page and most input types stopped working\n`
+    + `We decided to completely disable this scraper until this issue is resolved to prevent further spending of your credits\n`
+    + `*****`;
+
     /** @type {any} */
     const input = await Apify.getInput();
 
