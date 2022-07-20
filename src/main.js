@@ -20,6 +20,8 @@ const { log } = Apify.utils;
 Apify.main(async () => {
     throw `******\nINSTAGRAM SCRAPER DOESN'T WORK!\nInstagram changed layout of their page and most input types stopped working\n`
     + `We decided to completely disable this scraper until this issue is resolved to prevent further spending of your credits\n`
+    + `Some use-cases should be enabled today or tomorrow, most till the end of the week\n`
+    + `We will notify you on email once this actor is enabled again\n`
     + `*****`;
 
     /** @type {any} */
