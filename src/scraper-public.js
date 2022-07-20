@@ -296,8 +296,14 @@ class PublicScraper extends BaseScraper {
     async scrapePosts(context, ig) {
         const { extendScraperFunction, extendOutputFunction, input: { resultsLimit } } = this.options;
         const { page, request } = context;
-        const { pageData } = ig;
+
+        const userInfo = request.userData?.jsonResponse?.data?.data?.user;
+
+        let { pageData } = ig;
+
         const { pageType } = pageData;
+
+        if (userInfo) pageData = userInfo;
 
         const state = this.initScrollingState(pageData.id);
 
@@ -310,7 +316,6 @@ class PublicScraper extends BaseScraper {
                 throw e;
             }
         })();
-
         // safety net for endless scrolling and no data being returned
         const control = delay(300000);
         const defer = helpers.deferred();
@@ -425,21 +430,23 @@ class PublicScraper extends BaseScraper {
 
         // Check if the posts loaded properly
         if (pageType === PAGE_TYPES.PROFILE) {
-            const profilePageSel = '.ySN3v';
+            // todo: find out why this selector was chosen
+            // commenting out temporarily as I was getting error
+            // const profilePageSel = '.ySN3v';
 
-            try {
-                await page.waitForSelector(`${profilePageSel}`, { timeout: 5000 });
-            } catch (e) {
-                log.error('Profile page didn\'t load properly, trying again...');
-                throw new Error('Profile page didn\'t load properly, trying again...');
-            }
+            // try {
+            //     await page.waitForSelector(`${profilePageSel}`, { timeout: 30000 });
+            // } catch (e) {
+            //     log.error('Profile page didn\'t load properly, trying again...');
+            //     throw new Error('Profile page didn\'t load properly, trying again...');
+            // }
 
-            const privatePageSel = '.rkEop';
-            const elPrivate = await page.$(`${privatePageSel}`);
-            if (elPrivate) {
-                log.error('Profile is private exiting..');
-                return;
-            }
+            // const privatePageSel = '.rkEop';
+            // const elPrivate = await page.$(`${privatePageSel}`);
+            // if (elPrivate) {
+            //     log.error('Profile is private exiting..');
+            //     return;
+            // }
         }
 
         if (pageType === PAGE_TYPES.PLACE || pageType === PAGE_TYPES.HASHTAG) {
@@ -502,14 +509,13 @@ class PublicScraper extends BaseScraper {
     getPostsFromEntryData(context, ig) {
         const { request } = context;
         const { entryData, pageData: { pageType } } = ig;
-
         let pageData;
         switch (pageType) {
             case PAGE_TYPES.PLACE:
                 pageData = entryData?.LocationsPage?.[0]?.graphql;
                 break;
             case PAGE_TYPES.PROFILE:
-                pageData = entryData?.ProfilePage?.[0]?.graphql;
+                pageData = context.request.userData?.jsonResponse?.data || entryData?.ProfilePage?.[0]?.graphql;
                 break;
             case PAGE_TYPES.HASHTAG:
                 pageData = entryData?.TagPage?.[0]?.graphql;
