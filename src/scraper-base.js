@@ -61,9 +61,20 @@ class BaseScraper extends Apify.PuppeteerCrawler {
             }],
             preNavigationHooks: [async ({ request, page }, gotoOptions) => {
                 gotoOptions.waitUntil = 'networkidle2';
+                request.userData.isInitial = request.userData.isInitial ? request.userData.isInitial : false;
 
                 await page.on('response', async (response) => {
                     try {
+                        if (response.url().includes('/comments/') && response.url().includes('media')) {
+                            const graphRes = await helpers.handleResponse(response);
+                            if (graphRes?.data) request.userData.comments = graphRes;
+                        }
+
+                        if (response.url().includes('/info/') && response.url().includes('media')) {
+                            const graphRes = await helpers.handleResponse(response);
+                            if (graphRes?.data) request.userData.info = graphRes;
+                        }
+
                         if (response.url().includes('?content_type')) {
                             if (!request.userData.jsonResponse) request.userData.jsonResponse = {};
                             request.userData.jsonResponse.contentType = await response.url().match('=(.*)&')[1];
@@ -72,7 +83,6 @@ class BaseScraper extends Apify.PuppeteerCrawler {
                             if (!request.userData.jsonResponse) request.userData.jsonResponse = {};
                             request.userData.jsonResponse = await helpers.handleResponse(response);
                         }
-    
                         if (response.url().includes('query_hash') && (request.userData?.jsonResponse?.data?.data?.user?.edge_owner_to_timeline_media.edges)) {
                             if (!request.userData.jsonResponse) request.userData.jsonResponse = {};
                             const graphRes = await helpers.handleResponse(response);
@@ -137,6 +147,11 @@ class BaseScraper extends Apify.PuppeteerCrawler {
             handlePageTimeoutSecs: 300 * 60, // Ex: 5 hours to crawl thousands of comments
             handlePageFunction: async (context) => {
                 const { request: { userData }, page } = context;
+
+                if (!userData.isInitial) {
+                    await page.reload({ waitUntil: ["networkidle0"] });
+                    userData.isInitial = true;
+                }
                 if (userData?.jsonResponse?.error && userData?.jsonResponse.code !== 200) {
                     throw new Error(userData.jsonResponse.error);
                 }
