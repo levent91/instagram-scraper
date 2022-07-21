@@ -4,6 +4,7 @@ const { createAddPost } = require('./posts');
 const { createAddProfile } = require('./details');
 const { searchUrls, createHashtagSearch, createLocationSearch } = require('./search');
 const helpers = require('./helpers');
+const { maybeDisableActor } = require('./actor-disable');
 
 const { getPageTypeFromUrl } = helpers;
 
@@ -18,14 +19,11 @@ const PublicScraper = require('./scraper-public');
 const { log } = Apify.utils;
 
 Apify.main(async () => {
-    throw `******\nINSTAGRAM SCRAPER DOESN'T WORK!\nInstagram changed layout of their page and most input types stopped working\n`
-    + `We decided to completely disable this scraper until this issue is resolved to prevent further spending of your credits\n`
-    + `Some use-cases should be enabled today or tomorrow, most till the end of the week\n`
-    + `We will notify you on email once this actor is enabled again\n`
-    + `*****`;
-
     /** @type {any} */
     const input = await Apify.getInput();
+
+    // Crash actor depending if it works for specific input
+    maybeDisableActor(input);
 
     // login cookies can be array of objects (single cookies) or array of arrays of objects (multiple cookies)
     if (input.loginCookies?.length > 0) {
