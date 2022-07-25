@@ -68,7 +68,7 @@ class PublicScraper extends BaseScraper {
                 : [],
             latestIgtvVideos: data.edge_felix_video_timeline ? data.edge_felix_video_timeline.edges.map(formatIGTVVideo) : [],
             postsCount: data?.media_count || data?.edge_owner_to_timeline_media?.count,
-            latestPosts: data.edge_owner_to_timeline_media ? data.edge_owner_to_timeline_media.edges.map((edge) => edge.node).map(formatSinglePost) : [],
+            latestPosts: data.edge_owner_to_timeline_media?.length ? data.edge_owner_to_timeline_media.edges?.map((edge) => edge.node).map(formatSinglePost) : data?.edge_owner_to_timeline_media?.edges || [],
             following,
             followedBy,
             taggedPosts,
