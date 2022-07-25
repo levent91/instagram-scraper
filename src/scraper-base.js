@@ -94,6 +94,7 @@ class BaseScraper extends Apify.PuppeteerCrawler {
                         }
                         if (response.url().includes('query_hash') && (request.userData?.jsonResponse?.data?.data?.user?.edge_owner_to_timeline_media.edges)) {
                             if (!request.userData.jsonResponse) request.userData.jsonResponse = {};
+                            // this one is required for scrolling, edges keep updating as we scroll down
                             const graphRes = await helpers.handleResponse(response);
                             request.userData.jsonResponse.data.data.user.edge_owner_to_timeline_media.edges = graphRes.data?.data?.user?.edge_owner_to_timeline_media.edges;
                         }
