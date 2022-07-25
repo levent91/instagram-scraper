@@ -20,7 +20,6 @@ const {
     },
 } = consts;
 const errors = require('./errors');
-const { Request } = require('apify');
 
 const { sleep, log } = Apify.utils;
 
