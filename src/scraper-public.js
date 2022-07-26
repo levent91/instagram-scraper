@@ -8,7 +8,7 @@ const consts = require('./consts');
 const { PAGE_TYPES, GRAPHQL_ENDPOINT } = consts;
 const BaseScraper = require('./scraper-base');
 
-const { formatSinglePost, formatIGTVVideo } = require('./details');
+const { formatSinglePost, formatIGTVVideo, mergePostDetailInformation } = require('./details');
 
 const errors = require('./errors');
 const helpers = require('./helpers');
@@ -41,34 +41,34 @@ class PublicScraper extends BaseScraper {
 
         // const data = entryData.ProfilePage[0].graphql.user;
         // const data = entryData.config.viewer;
-        const data = context.request.userData?.jsonResponse?.data?.data?.user || entryData?.ProfilePage[0]?.graphql?.user;
+        const data = context.request.userData?.userInfo?.data?.user || context.request.userData?.jsonResponse?.data?.data?.user || entryData?.ProfilePage[0]?.graphql?.user;
 
         const result = {
-            id: data.id,
+            id: data.pk || data.id,
             username: data.username,
             fullName: data.full_name,
             biography: data.biography,
             externalUrl: data.external_url,
-            externalUrlShimmed: data.external_url_linkshimmed,
-            followersCount: data.edge_followed_by.count,
-            followsCount: data.edge_follow.count,
+            externalUrlShimmed: data.external_lynx_url || data.external_url_linkshimmed,
+            followersCount: data?.follower_count || data?.edge_followed_by?.count,
+            followsCount: data?.following_count || data?.edge_follow?.count,
             hasChannel: data.has_channel,
             highlightReelCount: data.highlight_reel_count,
-            isBusinessAccount: data.is_business_account,
-            joinedRecently: data.is_joined_recently,
+            isBusinessAccount: data.is_business || data.is_business_account,
+            joinedRecently: data.is_new_to_instagram || data.is_joined_recently,
             businessCategoryName: data.business_category_name,
             private: data.is_private,
             verified: data.is_verified,
             profilePicUrl: data.profile_pic_url,
-            profilePicUrlHD: data.profile_pic_url_hd,
+            profilePicUrlHD: data?.hd_profile_pic_url_info?.url || data.profile_pic_url_hd,
             facebookPage: data.connected_fb_page,
-            igtvVideoCount: data.edge_felix_video_timeline.count,
+            igtvVideoCount: data?.total_igtv_videos || data?.edge_felix_video_timeline?.count,
             relatedProfiles: includeRelatedProfiles
                 ? (data.edge_related_profiles?.edges?.map(helpers.mapNode) ?? [])
                 : [],
             latestIgtvVideos: data.edge_felix_video_timeline ? data.edge_felix_video_timeline.edges.map(formatIGTVVideo) : [],
-            postsCount: data.edge_owner_to_timeline_media.count,
-            latestPosts: data.edge_owner_to_timeline_media ? data.edge_owner_to_timeline_media.edges.map((edge) => edge.node).map(formatSinglePost) : [],
+            postsCount: data?.media_count || data?.edge_owner_to_timeline_media?.count,
+            latestPosts: data.edge_owner_to_timeline_media?.length ? data.edge_owner_to_timeline_media.edges?.map((edge) => edge.node).map(formatSinglePost) : data?.edge_owner_to_timeline_media?.edges || [],
             following,
             followedBy,
             taggedPosts,
@@ -213,18 +213,22 @@ class PublicScraper extends BaseScraper {
         const likedBy = await this.getPostLikes(context, ig);
         const { entryData, additionalData } = ig;
 
+        if (userData.misc?.data && userData.info?.data && userData.comments?.data) {
+            userData.postDetail = mergePostDetailInformation(userData);
+        }
 
-        const data = userData.jsonResponse?.data?.data?.shortcode_media ?? entryData?.PostPage?.[0]?.graphql?.shortcode_media
-            ?? additionalData?.graphql?.shortcode_media;
+
+        const data = userData?.postDetail || userData.jsonResponse?.data?.data?.shortcode_media || entryData?.PostPage?.[0]?.graphql?.shortcode_media
+            || additionalData?.graphql?.shortcode_media;
 
         return {
             ...formatSinglePost(data),
             captionIsEdited: typeof data.caption_is_edited !== 'undefined' ? data.caption_is_edited : null,
             hasRankedComments: data.has_ranked_comments,
             commentsDisabled: data.comments_disabled,
-            locationSlug: data.location ? data.location.slug : null,
+            locationSlug: data.location ? data.location.short_name || data.location.slug : null,
             isAdvertisement: typeof data.is_ad !== 'undefined' ? data.is_ad : null,
-            taggedUsers: data.edge_media_to_tagged_user ? data.edge_media_to_tagged_user.edges.map((edge) => edge.node.user.username) : [],
+            taggedUsers: data.edge_media_to_tagged_user?.length ? data.edge_media_to_tagged_user.map((edge) => edge.user) : [],
             likedBy,
         };
     }
@@ -258,7 +262,6 @@ class PublicScraper extends BaseScraper {
      */
     async getOutputFromEntryData(context, ig) {
         const { pageType } = ig.pageData;
-
         switch (pageType) {
             case PAGE_TYPES.PLACE:
                 return this.formatPlaceOutput(context, ig);
