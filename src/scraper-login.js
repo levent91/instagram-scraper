@@ -9,7 +9,6 @@ const helpers = require('./helpers');
 const { loginManager } = require('./login');
 const consts = require('./consts');
 const errors = require('./errors');
-const { Request } = require('apify');
 
 const {
     V1_ENDPOINT,
