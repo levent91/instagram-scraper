@@ -49,10 +49,15 @@ class BaseScraper extends Apify.PuppeteerCrawler {
             useSessionPool: true,
             postNavigationHooks: [async ({ request, page }) => {
                 try {
-                    if (request.url.includes('/p/') && rest.input?.resultsType === SCRAPE_TYPES.DETAILS) {
+                    if (request.url.includes('/p/') && rest.input?.resultsType === SCRAPE_TYPES.DETAILS && rest.input?.loginCookies.length) {
                         // hover to profile pic to trigger /info/ /user/ request
-                        await page.hover('header > div:nth-of-type(1)');
-                        await page.waitForTimeout(2000);
+                        // you can't do it without login
+                        try {
+                            await page.hover('header > div:nth-of-type(1)');
+                            await page.waitForTimeout(2000);
+                        } catch (e) {
+                            throw new Error(`Couldn't get the user info, check your cookies or retry`);
+                        }
                     }
 
                     if (!page.isClosed()) {
@@ -72,6 +77,12 @@ class BaseScraper extends Apify.PuppeteerCrawler {
                         if (response.url().includes('/comments/') && response.url().includes('media')) {
                             const graphRes = await helpers.handleResponse(response);
                             if (graphRes?.data) request.userData.comments = graphRes;
+                        }
+
+                        if (response.url().includes('query_hash') && response.url().includes('child_comment_count')) {
+                            const graphRes = await helpers.handleResponse(response);
+                            request.userData.nonLoginInfo = {};
+                            if (graphRes?.data) request.userData.nonLoginInfo = graphRes;
                         }
 
                         if (response.url().includes('/info/') && response.url().includes('media')) {
@@ -161,14 +172,27 @@ class BaseScraper extends Apify.PuppeteerCrawler {
             proxyConfiguration: options.proxyConfiguration,
             handlePageTimeoutSecs: 300 * 60, // Ex: 5 hours to crawl thousands of comments
             handlePageFunction: async (context) => {
-                const { request, page } = context;
+                const { request, page, session } = context;
                 const { userData } = request;
-                if (!userData.isInitial && !userData.userInfo && request.url.includes('/p/') && rest.input?.resultsType === SCRAPE_TYPES.DETAILS) {
+                if (request.url.includes('/p/') && rest.input?.resultsType === SCRAPE_TYPES.DETAILS && !rest.input?.loginCookies?.length) {
+                    log.info(`Checking if the page is loaded`);
+                    try {
+                        await page.waitForSelector('footer[role="contentinfo"]', { timeout: 5000 });
+                        log.info(`Page loaded`);
+                    } catch (e) {
+                        session.markBad();
+                        throw new Error(`Post page didn't load properly without cookies, trying again`);
+                    }
+                }
+
+                if (!userData.isInitial && !userData.userInfo && request.url.includes('/p/') && rest.input?.resultsType === SCRAPE_TYPES.DETAILS && rest.input?.loginCookies?.length) {
                     // sometimes need to reload page to get /info/ /user/ request
                     // todo: find a better way to do this
                     await page.reload({ waitUntil: 'networkidle2' });
                     userData.isInitial = true;
                 }
+
+
 
                 if (userData?.jsonResponse?.error && userData?.jsonResponse.code !== 200) {
                     throw new Error(userData.jsonResponse.error);
