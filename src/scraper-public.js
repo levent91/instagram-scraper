@@ -212,7 +212,7 @@ class PublicScraper extends BaseScraper {
         const { entryData, additionalData } = ig;
 
         if ((userData.misc?.data && userData.info?.data && userData.comments?.data) || (userData.misc?.data && userData.nonLoginInfo?.data)) {
-            userData.postDetail = await mergePostDetailInformation(userData);
+            userData.postDetail = mergePostDetailInformation(userData);
         }
 
         const data = userData?.postDetail || userData.jsonResponse?.data?.data?.shortcode_media || entryData?.PostPage?.[0]?.graphql?.shortcode_media

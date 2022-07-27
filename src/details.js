@@ -144,7 +144,7 @@ const createAddProfile = (requestQueue) => {
  * @param {Record<string, any>} userData
  */
 
-const mergePostDetailInformation = async (userData) => {
+const mergePostDetailInformation = (userData) => {
     const { misc, info, comments, nonLoginInfo } = userData;
     // info comes when there is a cookie login
     const isVideo = misc?.data?.data?.user?.edge_owner_to_timeline_media?.edges?.[0]?.node?.is_video ?? false;
