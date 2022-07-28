@@ -39,8 +39,6 @@ class PublicScraper extends BaseScraper {
 
         const { entryData } = ig;
 
-        // const data = entryData.ProfilePage[0].graphql.user;
-        // const data = entryData.config.viewer;
         const data = context.request.userData?.userInfo?.data?.user || context.request.userData?.jsonResponse?.data?.data?.user || entryData?.ProfilePage[0]?.graphql?.user;
 
         const result = {
@@ -213,10 +211,9 @@ class PublicScraper extends BaseScraper {
         const likedBy = await this.getPostLikes(context, ig);
         const { entryData, additionalData } = ig;
 
-        if (userData.misc?.data && userData.info?.data && userData.comments?.data) {
+        if ((userData.misc?.data && userData.info?.data && userData.comments?.data) || (userData.misc?.data && userData.nonLoginInfo?.data)) {
             userData.postDetail = mergePostDetailInformation(userData);
         }
-
 
         const data = userData?.postDetail || userData.jsonResponse?.data?.data?.shortcode_media || entryData?.PostPage?.[0]?.graphql?.shortcode_media
             || additionalData?.graphql?.shortcode_media;
@@ -228,7 +225,7 @@ class PublicScraper extends BaseScraper {
             commentsDisabled: data.comments_disabled,
             locationSlug: data.location ? data.location.short_name || data.location.slug : null,
             isAdvertisement: typeof data.is_ad !== 'undefined' ? data.is_ad : null,
-            taggedUsers: data.edge_media_to_tagged_user?.length ? data.edge_media_to_tagged_user.map((edge) => edge.user) : [],
+            taggedUsers: data.edge_media_to_tagged_user?.length ? data.edge_media_to_tagged_user.map((edge) => edge.node?.user?.username || edge.user) : [],
             likedBy,
         };
     }
