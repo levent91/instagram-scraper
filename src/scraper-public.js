@@ -33,14 +33,14 @@ class PublicScraper extends BaseScraper {
      */
     async formatProfileOutput(context, ig) {
         const { includeTaggedPosts, includeRelatedProfiles } = this.options.input;
+        const { request: { userData } } = context;
         const following = await this.getProfileFollowing(context, ig);
         const followedBy = await this.getProfileFollowers(context, ig);
         const taggedPosts = includeTaggedPosts ? await this.getTaggedPosts(context, ig) : [];
 
         const { entryData } = ig;
 
-        const data = context.request.userData?.userInfo?.data?.user || context.request.userData?.jsonResponse?.data?.data?.user || entryData?.ProfilePage[0]?.graphql?.user;
-
+        const data = userData?.userInfo?.data?.user || userData?.jsonResponse?.data?.data?.user || await helpers.parsePageScript(context.page);
         const result = {
             id: data.pk || data.id,
             username: data.username,
@@ -72,7 +72,6 @@ class PublicScraper extends BaseScraper {
             taggedPosts,
             hasPublicStory: data.has_public_story,
         };
-
         return result;
     }
 
