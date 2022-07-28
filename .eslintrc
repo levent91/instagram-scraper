@@ -12,6 +12,7 @@
         "import/extensions": [2, "always"],
         "no-underscore-dangle": 1,
         "no-empty": 1,
-        "no-unused-vars": 1
+        "no-unused-vars": 1,
+        "no-throw-literal": "off"
     }
 }
