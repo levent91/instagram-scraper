@@ -787,6 +787,22 @@ const handleResponse = async (response) => {
     return responseObject;
 };
 
+/**
+ * Parses the script file if there is no valid XHR
+ * @param { Puppeteer.Page } page
+ * @returns
+*/
+
+const parsePageScript = async (page) => {
+    const scripts = await page.$$eval('script', scripts => scripts.map(script => script.innerHTML));
+    for (const script of scripts) {
+        if (script.includes('highlight_reel_count')) {
+            const json = script.split(`"result":`)?.[1]?.slice(0, -15);
+            return eval(`(${JSON.parse(json).response})`).data.user;
+        }
+    }
+}
+
 module.exports = {
     getPageTypeFromUrl,
     getCheckedVariable,
@@ -816,4 +832,5 @@ module.exports = {
     edgesToText,
     secondsToDate,
     handleResponse,
+    parsePageScript,
 };
