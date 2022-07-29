@@ -1,6 +1,10 @@
-# Instagram Scraper is under maintenance!!!
-**Don't use this scraper now!** 
-Instagram changed layout of their pages. The team is working on a prompt fix. All current users of this scraper will be notified over email once the fix is available. It should happen within a day.
+# Only certain features of Instagram Scraper work!!!
+Instagram changed layout of their pages. The team is working on a prompt fix. Currently working configurations are:
+Profile page -> details
+Post page -> details
+Profile page -> posts (only with login cookies)
+
+Use login cookies for better experience as residential proxies need a lot of retries to get all proper content.
 
 ## Features
 Our free Instagram Scraper allows you to scrape posts from a user's profile page, hashtag page, or place. When a link to an Instagram post is provided, it can scrape Instagram comments.
