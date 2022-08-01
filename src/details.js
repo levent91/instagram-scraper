@@ -147,7 +147,7 @@ const createAddProfile = (requestQueue) => {
 const mergePostDetailInformation = (userData) => {
     const { misc, info, comments, nonLoginInfo } = userData;
     // info comes when there is a cookie login
-    const isVideo = misc?.data?.data?.user?.edge_owner_to_timeline_media?.edges?.[0]?.node?.is_video ?? false;
+    const isVideo = misc?.data?.data?.user?.edge_owner_to_timeline_media?.edges?.[0]?.node?.is_video || nonLoginInfo?.data?.data?.shortcode_media?.video_url || false;
     if (info) {
         const isCarousel = !!info.data.items?.[0]?.carousel_media?.length;
         return {

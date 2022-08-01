@@ -208,7 +208,7 @@ class PublicScraper extends BaseScraper {
         const likedBy = await this.getPostLikes(context, ig);
         const { entryData, additionalData } = ig;
 
-        if ((userData.misc?.data && userData.info?.data && userData.comments?.data) || (userData.misc?.data && userData.nonLoginInfo?.data)) {
+        if ((userData.misc?.data && userData.info?.data && userData.comments?.data) || (userData.nonLoginInfo?.data)) {
             userData.postDetail = mergePostDetailInformation(userData);
         }
 
