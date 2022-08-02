@@ -800,6 +800,11 @@ const parsePageScript = async (page) => {
             const json = script.split(`"result":`)?.[1]?.slice(0, -15);
             return eval(`(${JSON.parse(json).response})`).data.user;
         }
+        // parse script with window._sharedData
+        if (script.includes('window._sharedData')) {
+            const parsedScript = script.replace('window._sharedData = ', '').slice(0, -1);
+            return eval(`(${parsedScript})`).entry_data?.ProfilePage?.[0]?.graphql?.user;
+        }
     }
 }
 
