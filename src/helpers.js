@@ -796,14 +796,15 @@ const handleResponse = async (response) => {
 const parsePageScript = async (page) => {
     const scripts = await page.$$eval('script', scripts => scripts.map(script => script.innerHTML));
     for (const script of scripts) {
-        if (script.includes('highlight_reel_count')) {
-            const json = script.split(`"result":`)?.[1]?.slice(0, -15);
-            return eval(`(${JSON.parse(json).response})`).data.user;
-        }
         // parse script with window._sharedData
         if (script.includes('window._sharedData')) {
             const parsedScript = script.replace('window._sharedData = ', '').slice(0, -1);
             return eval(`(${parsedScript})`).entry_data?.ProfilePage?.[0]?.graphql?.user;
+        }
+        // or check the alternative script
+        if (script.includes('highlight_reel_count')) {
+            const json = script.split(`"result":`)?.[1]?.slice(0, -15);
+            return eval(`(${JSON.parse(json).response})`).data.user;
         }
     }
 }
