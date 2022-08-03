@@ -311,7 +311,6 @@ class BaseScraper extends Apify.PuppeteerCrawler {
                         request.noRetry = true;
                         throw errors.notPostPage();
                     }
-
                     return this.scrapeComments(context, igData);
                 case SCRAPE_TYPES.DETAILS:
                     return this.scrapeDetails(context, igData);
@@ -802,7 +801,7 @@ class BaseScraper extends Apify.PuppeteerCrawler {
         const { page, request } = context;
         const { pageData } = ig;
         const { input: { resultsLimit = 0 } } = this.options;
-        const state = this.initScrollingState(request.userData?.jsonResponse?.data?.data?.user?.id || pageData.id);
+        const state = this.initScrollingState(pageData.id || request.userData?.jsonResponse?.data?.data?.user?.id);
 
         if (!resultsLimit) {
             return false;
