@@ -195,13 +195,6 @@
             "sectionCaption": "Experimental features",
             "sectionDescription": "Warning: the features in this section are highly experimental, can result in a ban of an Instagram account if logged in, and might cause the scraper to fail."
         },
-        "debugLog": {
-            "title": "Debug Log",
-            "description": "Enable a more verbose logging to be able to understand what's happening during the scraping.",
-            "type": "boolean",
-            "default": false,
-            "editor": "checkbox"
-        },
         "includeHasStories": {
             "title": "Include Has Stories",
             "type": "boolean",
@@ -219,6 +212,14 @@
             "type": "boolean",
             "description": "Get the related profiles for each input profile",
             "editor": "checkbox"
+        },
+        "debugLog": {
+            "title": "Developer/Debug mode",
+            "description": "Don't use this unless you are developing this actor. Enable all use-cases for developer testing. Enable a more verbose logging to be able to understand what's happening during the scraping.",
+            "type": "boolean",
+            "default": false,
+            "editor": "checkbox",
+            "sectionCaption": "Developer mode"
         }
     },
     "required": ["proxy"]

@@ -2,6 +2,11 @@ const { getPageTypeFromUrl } = require('./helpers');
 const { PAGE_TYPES, SCRAPE_TYPES } = require('./consts');
 
 module.exports.maybeDisableActor = (input) => {
+    // We want to be able to run the actor even with some inputs not allowed for normal users 
+    if (input.debugLog) {
+        return;
+    }
+
     const startUrl = input.directUrls?.[0];
     const pageType = getPageTypeFromUrl(startUrl);
 
