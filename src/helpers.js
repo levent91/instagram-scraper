@@ -43,7 +43,7 @@ const getEntryData = async (page) => {
         throw new Error('Page took too long to load initial data, trying again.');
     }
 
-    return page.evaluate(() => window?._sharedData);
+    return page.evaluate(() => window?._sharedData?.entry_data);
 };
 
 /**
