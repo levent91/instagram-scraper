@@ -38,7 +38,7 @@ class PublicScraper extends BaseScraper {
         const followedBy = await this.getProfileFollowers(context, ig);
         const taggedPosts = includeTaggedPosts ? await this.getTaggedPosts(context, ig) : [];
 
-        const data = userData?.userInfo?.data?.user || userData?.jsonResponse?.data?.data?.user || await helpers.parsePageScript(page);
+        const data = ig?.entryData?.ProfilePage?.[0]?.graphql?.user || userData?.userInfo?.data?.user || userData?.jsonResponse?.data?.data?.user || await helpers.parsePageScript(page);
         const result = {
             id: data.pk || data.id,
             username: data.username,
@@ -207,14 +207,20 @@ class PublicScraper extends BaseScraper {
         const { request: { userData } } = context;
         const likedBy = await this.getPostLikes(context, ig);
         const { entryData, additionalData } = ig;
-
         if ((userData.misc?.data && userData.info?.data && userData.comments?.data) || (userData.nonLoginInfo?.data)) {
             userData.postDetail = mergePostDetailInformation(userData);
         }
 
-        const data = userData?.postDetail || userData.jsonResponse?.data?.data?.shortcode_media || entryData?.PostPage?.[0]?.graphql?.shortcode_media
-            || additionalData?.graphql?.shortcode_media;
+        const data = additionalData?.graphql?.shortcode_media || entryData?.PostPage?.[0]?.graphql?.shortcode_media || userData?.postDetail || userData.jsonResponse?.data?.data?.shortcode_media;
 
+        let taggedUsers;
+        if (data?.edge_media_to_tagged_user?.length && data.edge_media_to_tagged_user?.edges?.length) {
+            taggedUsers = data.edge_media_to_tagged_user.edges.map((edge) => edge.node.user.username);
+        } else if (data?.edge_media_to_tagged_user?.length && data.edge_media_to_tagged_user?.length) {
+            taggedUsers = data.edge_media_to_tagged_user.map((edge) => edge.node?.user?.username || edge.user)
+        } else {
+            taggedUsers = [];
+        }
         return {
             ...formatSinglePost(data),
             captionIsEdited: typeof data.caption_is_edited !== 'undefined' ? data.caption_is_edited : null,
@@ -222,7 +228,7 @@ class PublicScraper extends BaseScraper {
             commentsDisabled: data.comments_disabled,
             locationSlug: data.location ? data.location.short_name || data.location.slug : null,
             isAdvertisement: typeof data.is_ad !== 'undefined' ? data.is_ad : null,
-            taggedUsers: data.edge_media_to_tagged_user?.length ? data.edge_media_to_tagged_user.map((edge) => edge.node?.user?.username || edge.user) : [],
+            taggedUsers,
             likedBy,
         };
     }
@@ -512,7 +518,7 @@ class PublicScraper extends BaseScraper {
                 pageData = entryData?.LocationsPage?.[0]?.graphql;
                 break;
             case PAGE_TYPES.PROFILE:
-                pageData = context.request.userData?.jsonResponse?.data || entryData?.ProfilePage?.[0]?.graphql;
+                pageData = entryData?.ProfilePage?.[0]?.graphql || context.request.userData?.jsonResponse?.data;
                 break;
             case PAGE_TYPES.HASHTAG:
                 pageData = entryData?.TagPage?.[0]?.graphql;
