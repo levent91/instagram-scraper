@@ -86,7 +86,7 @@ const formatSinglePost = (node) => {
             ownerUsername: user?.username ?? '',
             text,
             timestamp: secondsToDate(created_at),
-        })) : node.comments.edges?.length ? node.comments.edges.map(({ node: { id, owner: { username }, text, created_at } }) => ({
+        })) : node.comments?.edges?.length ? node.comments.edges.map(({ node: { id, owner: { username }, text, created_at } }) => ({
             id,
             ownerUsername: username,
             text,
@@ -102,10 +102,7 @@ const formatSinglePost = (node) => {
         videoViewCount: node.video_view_count,
         videoPlayCount: node.video_play_count,
         timestamp: secondsToDate(node.taken_at_timestamp),
-        // childPosts: node.carousel_media?.length ? node.carousel_media?.map?.((child) => formatSinglePost(child.node)) : [],
-        // todo: add childPosts
-        // since the childpost format is different, we should also map it to the correct format
-        childPosts: [],
+        childPosts: node.edge_sidecar_to_children?.edges?.map?.((child) => formatSinglePost(child.node)) ?? [],
         locationName: node.location?.name || node.location || null,
         locationId: node.location_id || node.location?.id || null,
         ownerFullName: node.full_name || node.owner?.full_name || null,
