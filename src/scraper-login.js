@@ -306,7 +306,6 @@ class LoginScraper extends PublicScraper {
     getPostsFromEntryData(context, ig) {
         const { request } = context;
         const { entryData, pageData: { pageType } } = ig;
-
         switch (pageType) {
             case PAGE_TYPES.PLACE: {
                 const data = entryData?.LocationsPage?.[0]?.native_location_data;
@@ -317,7 +316,7 @@ class LoginScraper extends PublicScraper {
             }
             case PAGE_TYPES.PROFILE:
                 return [
-                    this.getPostsFromGraphQL(pageType, context.request.userData?.jsonResponse?.data || entryData?.ProfilePage?.[0]?.graphql),
+                    this.getPostsFromGraphQL(pageType, entryData?.ProfilePage?.[0]?.graphql || context.request.userData?.jsonResponse?.data),
                 ];
             case PAGE_TYPES.HASHTAG: {
                 const data = entryData?.TagPage?.[0]?.data;
@@ -578,10 +577,10 @@ class LoginScraper extends PublicScraper {
         const pushPosts = (timeline, outputFn, response) => {
             // todo: modify here
             // overwriting this for new response
-            timeline = pageData.edge_owner_to_timeline_media;
+            timeline = timeline?.posts ? timeline : pageData.edge_owner_to_timeline_media;
             return this.filterPushedItemsAndUpdateState(
                 // timeline.posts,
-                timeline.edges,
+                timeline?.posts?.length ? timeline.posts : timeline.edges,
                 pageData.id,
                 (items, position) => {
                     return outputFn(items, position);
