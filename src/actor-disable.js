@@ -8,7 +8,7 @@ module.exports.maybeDisableActor = (input) => {
     }
 
     const startUrl = input.directUrls?.[0];
-    const pageType = getPageTypeFromUrl(startUrl);
+    const pageType = startUrl ? getPageTypeFromUrl(startUrl) : PAGE_TYPES.HASHTAG;
 
     const isProfileToDetails = pageType === PAGE_TYPES.PROFILE && input.resultsType === SCRAPE_TYPES.DETAILS;
     const isPostToDetails = pageType === PAGE_TYPES.POST && input.resultsType === SCRAPE_TYPES.DETAILS;
