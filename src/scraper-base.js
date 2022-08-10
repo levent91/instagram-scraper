@@ -20,6 +20,7 @@ const {
     },
 } = consts;
 const errors = require('./errors');
+const { SEARCH_TYPES } = require('./consts');
 
 const { sleep, log } = Apify.utils;
 
@@ -79,6 +80,16 @@ class BaseScraper extends Apify.PuppeteerCrawler {
                             if (graphRes?.data) request.userData.comments = graphRes;
                         }
 
+                        if (response.url().includes('/tags/') && response.url().includes('tag_name')) {
+                            const graphRes = await helpers.handleResponse(response);
+                            if (graphRes?.data) request.userData.hashtag = graphRes;
+                        }
+
+                        if (response.url().includes('/tags/') && response.url().includes('sections')) {
+                            const graphRes = await helpers.handleResponse(response);
+                            if (graphRes?.data) request.userData.tags = graphRes;
+                        }
+
                         if (response.url().includes('query_hash') && response.url().includes('child_comment_count')) {
                             const graphRes = await helpers.handleResponse(response);
                             request.userData.nonLoginInfo = {};
@@ -88,6 +99,11 @@ class BaseScraper extends Apify.PuppeteerCrawler {
                         if (response.url().includes('/info/') && response.url().includes('media')) {
                             const graphRes = await helpers.handleResponse(response);
                             if (graphRes?.data) request.userData.info = graphRes;
+                        }
+
+                        if (response.url().includes('feed') && response.url().includes('timeline')) {
+                            const graphRes = await helpers.handleResponse(response);
+                            if (graphRes?.data) request.userData.timeline = graphRes;
                         }
 
                         if (response.url().includes('/users/') && response.url().includes('info')) {
@@ -185,14 +201,15 @@ class BaseScraper extends Apify.PuppeteerCrawler {
                     }
                 }
 
-                if (!userData.isInitial && !userData.userInfo && request.url.includes('/p/') && rest.input?.resultsType === SCRAPE_TYPES.DETAILS && rest.input?.loginCookies?.length) {
+                if (!userData.isInitial && !userData.userInfo
+                    && ((request.url.includes('/p/') && (rest.input?.resultsType === SCRAPE_TYPES.DETAILS)))
+                && rest.input?.loginCookies?.length) {
                     // sometimes need to reload page to get /info/ /user/ request
                     // todo: find a better way to do this
                     await page.reload({ waitUntil: 'networkidle2' });
+                    await page.waitForTimeout(5000);
                     userData.isInitial = true;
                 }
-
-
 
                 if (userData?.jsonResponse?.error && userData?.jsonResponse.code !== 200) {
                     throw new Error(userData.jsonResponse.error);
@@ -677,7 +694,7 @@ class BaseScraper extends Apify.PuppeteerCrawler {
     /**
      * @param {string} id
      */
-    initScrollingState(id) {
+    async initScrollingState(id) {
         const { scrollingState } = this;
 
         if (!id) {
@@ -709,17 +726,15 @@ class BaseScraper extends Apify.PuppeteerCrawler {
      */
     async filterPushedItemsAndUpdateState(items, id, parsingFn, outputFn, info = { label: 'results', total: null }) {
         const { minMaxDate, input: { resultsLimit = 0 } } = this.options;
-        const state = this.initScrollingState(id);
+        const state = await this.initScrollingState(id);
 
         if (!resultsLimit || !items?.length || state.reachedLimit) {
             return 0;
         }
 
         state.allDuplicates = false;
-
         const currentCount = () => Object.keys(state.ids).length;
         const parsedItems = parsingFn(items, currentCount());
-
         let itemsPushed = 0;
 
         const isAllOutOfTimeRange = parsedItems.every(({ timestamp }) => {
@@ -801,8 +816,7 @@ class BaseScraper extends Apify.PuppeteerCrawler {
         const { page, request } = context;
         const { pageData } = ig;
         const { input: { resultsLimit = 0 } } = this.options;
-        const state = this.initScrollingState(pageData.id || request.userData?.jsonResponse?.data?.data?.user?.id);
-
+        const state = await this.initScrollingState(pageData.id || request.userData?.jsonResponse?.data?.data?.user?.id || request.userData?.hashtag?.data?.data?.id);
         if (!resultsLimit) {
             return false;
         }
