@@ -308,7 +308,7 @@ class PublicScraper extends BaseScraper {
 
         if (userInfo) pageData = userInfo;
 
-        const state = this.initScrollingState(pageData.id);
+        const state = await this.initScrollingState(pageData.id);
 
         // Get variable we look for in the query string of request
         const checkedVariable = (() => {
@@ -327,7 +327,7 @@ class PublicScraper extends BaseScraper {
          * @param {{ posts: any[], postsCount: number }} timeline
          * @param {Puppeteer.HTTPResponse} [response]
          */
-        const pushPosts = (timeline, response = undefined) => {
+        const pushPosts = async (timeline, response = undefined) => {
             timeline = pageData.edge_owner_to_timeline_media.edges;
             return this.filterPushedItemsAndUpdateState(
                 // timeline.posts,

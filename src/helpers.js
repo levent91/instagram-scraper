@@ -557,7 +557,7 @@ const extendFunction = async ({
 
         for (const item of await splitMap(data, merged)) {
             if (filter && !(await filter({ data, item }, merged))) {
-                continue; // eslint-disable-line no-continue
+                continue;
             }
 
             const result = await (evaledFn.runInThisContext()({
@@ -794,20 +794,20 @@ const handleResponse = async (response) => {
 */
 
 const parsePageScript = async (page) => {
-    const scripts = await page.$$eval('script', scripts => scripts.map(script => script.innerHTML));
+    const scripts = await page.$$eval('script', (scripts) => scripts.map((script) => script.innerHTML));
     for (const script of scripts) {
         // parse script with window._sharedData
         if (script.includes('window._sharedData')) {
             const parsedScript = script.replace('window._sharedData = ', '').slice(0, -1);
             return eval(`(${parsedScript})`).entry_data?.ProfilePage?.[0]?.graphql?.user;
-        }
-        // or check the alternative script
-        if (script.includes('highlight_reel_count')) {
+        } if (script.includes('highlight_reel_count')) {
             const json = script.split(`"result":`)?.[1]?.slice(0, -15);
             return eval(`(${JSON.parse(json).response})`).data.user;
+        } if (script.includes('HasteSupportData')) {
+            log.debug('Found HasteSupportData, no shareddata nor highlight_reel_count');
         }
     }
-}
+};
 
 module.exports = {
     getPageTypeFromUrl,

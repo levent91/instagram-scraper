@@ -1,3 +1,4 @@
+/* eslint-disable no-nested-ternary */
 const Apify = require('apify');
 // eslint-disable-next-line no-unused-vars
 const Puppeteer = require('puppeteer');
@@ -319,7 +320,7 @@ class LoginScraper extends PublicScraper {
                     this.getPostsFromGraphQL(pageType, entryData?.ProfilePage?.[0]?.graphql || context.request.userData?.jsonResponse?.data),
                 ];
             case PAGE_TYPES.HASHTAG: {
-                const data = entryData?.TagPage?.[0]?.data;
+                const data = entryData?.TagPage?.[0]?.data || request.userData?.hashtag?.data?.data;
                 return [
                     this.getPostsFromEndpoint(pageType, data?.top),
                     this.getPostsFromEndpoint(pageType, data?.recent),
@@ -483,10 +484,10 @@ class LoginScraper extends PublicScraper {
      * @param {any[]} [latestComments]
      */
     formatPostForOutput(item, latestComments = []) {
+        if (item.media_or_ad) item = item.media_or_ad;
         const medias = item.carousel_media ?? [];
         const caption = item.caption?.text?.trim?.() ?? null;
         const postInfo = helpers.parseCaption(caption);
-
         return {
             locationName: item.location?.name ?? null,
             locationId: item.location?.pk ? `${item.location.pk}` : null,
@@ -537,9 +538,9 @@ class LoginScraper extends PublicScraper {
      * @param {number} currentScrollingPosition
      */
     parseEndpointPostsForOutput(posts, pageData, currentScrollingPosition) {
+        if (posts?.[0]?.media_or_ad) posts = posts.map((item) => item.media_or_ad);
         return posts.map((item, index) => {
             const latestComments = this.parseCommentsForOutput(item.preview_comments, pageData, currentScrollingPosition);
-
             return {
                 queryTag: pageData.tagName,
                 queryUsername: pageData.userUsername,
@@ -559,28 +560,27 @@ class LoginScraper extends PublicScraper {
         const { page, request } = context;
         const { extendOutputFunction, extendScraperFunction } = this.options;
 
-        const cookieUser = request.userData?.jsonResponse?.data?.data?.user;
-
+        const cookieUser = request.userData?.jsonResponse?.data?.data?.user || request.userData.tags || request.userData?.hashtag?.data?.data;
         let { pageData } = ig;
 
         const { pageType } = pageData;
 
         if (cookieUser) pageData = cookieUser;
 
-        const state = this.initScrollingState(pageData.id);
+        const state = await this.initScrollingState(pageData.id);
 
         /**
          * @param {{ posts: any[], postsCount: number }} timeline
          * @param {(items: any[], position: number) => any[]} outputFn
          * @param {Puppeteer.HTTPResponse} [response]
          */
-        const pushPosts = (timeline, outputFn, response) => {
+        const pushPosts = async (timeline, outputFn, response) => {
             // todo: modify here
             // overwriting this for new response
-            timeline = timeline?.posts ? timeline : pageData.edge_owner_to_timeline_media;
+            timeline = timeline?.posts?.length ? timeline : pageData.edge_owner_to_timeline_media || request.userData.timeline.data;
             return this.filterPushedItemsAndUpdateState(
                 // timeline.posts,
-                timeline?.posts?.length ? timeline.posts : timeline.edges,
+                timeline?.posts?.length ? timeline.posts : timeline?.edges?.length ? timeline.edges : request.userData?.timeline?.data?.feed_items || [],
                 pageData.id,
                 (items, position) => {
                     return outputFn(items, position);
@@ -644,9 +644,7 @@ class LoginScraper extends PublicScraper {
                     }
 
                     control.postpone();
-
                     const timeline = this.getPostsFromGraphQL(pageType, data.data);
-
                     if (state.hasNextPage && !timeline.hasNextPage) {
                         log.debug('no more posts from graphql');
                         state.hasNextPage = false;
@@ -673,9 +671,7 @@ class LoginScraper extends PublicScraper {
                     }
 
                     control.postpone();
-
                     const timeline = this.getPostsFromEndpoint(pageType, data);
-
                     if (state.hasNextPage && !timeline.hasNextPage) {
                         log.debug('no more posts from v1');
                         state.hasNextPage = false;
@@ -717,7 +713,6 @@ class LoginScraper extends PublicScraper {
 
         const timelines = this.getPostsFromEntryData(context, ig);
         let hasNextPage = false;
-
         for (const timeline of timelines) {
             hasNextPage = hasNextPage || timeline.hasNextPage;
 
@@ -896,7 +891,6 @@ class LoginScraper extends PublicScraper {
                 };
             case PAGE_TYPES.HASHTAG: {
                 const posts = filterSections(data?.sections);
-
                 return {
                     hasNextPage: data?.more_available ?? false,
                     posts,
