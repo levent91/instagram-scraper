@@ -1,8 +1,8 @@
 # Only certain features of Instagram Scraper work!!!
-Instagram changed layout of their pages. The team is working on a prompt fix. Currently working configurations are:
-Profile page -> details
-Post page -> details
-Profile page -> posts (only with login cookies)
+
+Instagram changed layout of their pages. The team is working on a prompt fix. You can find currently working configurations here: https://apify.notion.site/Instagram-Status-page-34977151996c4b53acdf0dac781b0c9f
+
+[![Apify - Instagram Status page](https://i.imgur.com/y3iWq0e.png)](https://apify.notion.site/Instagram-Status-page-34977151996c4b53acdf0dac781b0c9f)
 
 Use login cookies for better experience as residential proxies need a lot of retries to get all proper content.
 
