@@ -50,7 +50,7 @@ class BaseScraper extends Apify.PuppeteerCrawler {
             useSessionPool: true,
             postNavigationHooks: [async ({ request, page }) => {
                 try {
-                    if (request.url.includes('/p/') && rest.input?.resultsType === SCRAPE_TYPES.DETAILS && rest.input?.loginCookies.length) {
+                    if (request.url.includes('/p/') && rest.input?.resultsType === SCRAPE_TYPES.DETAILS && rest.input?.loginCookies?.length) {
                         // hover to profile pic to trigger /info/ /user/ request
                         // you can't do it without login
                         try {
@@ -191,12 +191,11 @@ class BaseScraper extends Apify.PuppeteerCrawler {
                 const { request, page, session } = context;
                 const { userData } = request;
                 if (request.url.includes('/p/') && rest.input?.resultsType === SCRAPE_TYPES.DETAILS && !rest.input?.loginCookies?.length) {
-                    log.info(`Checking if the page is loaded`);
                     try {
                         await page.waitForSelector('footer[role="contentinfo"]', { timeout: 5000 });
-                        log.info(`Page loaded`);
                     } catch (e) {
                         session.markBad();
+                        log.info(`Post page didn't load properly without cookies, trying again`);
                         throw new Error(`Post page didn't load properly without cookies, trying again`);
                     }
                 }
@@ -685,7 +684,6 @@ class BaseScraper extends Apify.PuppeteerCrawler {
             transformedPosts.push(newPost);
             await sleep(500);
         }
-
         log.info(`Owner details - Details for ${posts.length} items expanded.`);
 
         return transformedPosts;
@@ -1081,7 +1079,6 @@ class BaseScraper extends Apify.PuppeteerCrawler {
         /** @type {boolean} */
         const hasNextPage = timeline?.page_info?.has_next_page ?? false;
         /** @type {number} */
-
         const postsCount = timeline?.count ?? postItems.length;
         return {
             posts: postItems,
