@@ -809,8 +809,20 @@ const parsePageScript = async (page) => {
     }
 };
 
+/**
+ * Generates random wait durations
+ * @param { Number } min
+ * @param { Number } max
+ * @returns { Number }
+*/
+
+const randomScrollWaitDuration = (min, max) => {
+    return Math.floor(Math.random() * (max - min + 1) + min);
+};
+
 module.exports = {
     getPageTypeFromUrl,
+    randomScrollWaitDuration,
     getCheckedVariable,
     queryHash,
     parseCaption,
