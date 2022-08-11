@@ -813,7 +813,7 @@ const parsePageScript = async (page) => {
  * Generates random wait durations
  * @param { Number } min
  * @param { Number } max
- * @returns
+ * @returns { Number }
 */
 
 const randomScrollWaitDuration = (min, max) => {
