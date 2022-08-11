@@ -908,14 +908,15 @@ class BaseScraper extends Apify.PuppeteerCrawler {
         if (type === 'posts') {
             let tries = 0;
             while (tries++ < 10) {
+                const randomDuration = helpers.randomScrollWaitDuration(2000, 6000);
                 const scrolled = await Promise.all([
                     page.evaluate(() => window.scrollTo(0, document.body.scrollHeight)),
-                    page.waitForResponse(() => true, { timeout: 4000 }).catch(() => null),
+                    page.waitForResponse(() => true, { timeout: randomDuration }).catch(() => null),
                 ]);
 
                 if (!scrolled[1]) {
                     if (tries > 3 && state.hasNextPage) {
-                        throw new Error('No response scrolling for 4s');
+                        throw new Error(`No response scrolling for ${randomDuration} ms`);
                     }
                 } else {
                     break;
