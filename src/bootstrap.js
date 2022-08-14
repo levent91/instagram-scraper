@@ -15,7 +15,7 @@ module.exports.bootstrapMetamorph = async (input) => {
     }
 
     if (directUrls?.length && resultsType === 'posts') {
-        if (!process.env.BOOTSTRAP_OFF) {
+        if (process.env.BOOTSTRAP_OFF) {
             log.warning('[DISABLED] bootstrapMetamorph');
             return;
         }
