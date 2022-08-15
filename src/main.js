@@ -16,6 +16,8 @@ const errors = require('./errors');
 const LoginScraper = require('./scraper-login');
 const PublicScraper = require('./scraper-public');
 
+const { bootstrapMetamorph } = require('./bootstrap');
+
 const { log } = Apify.utils;
 
 Apify.main(async () => {
@@ -52,6 +54,7 @@ Apify.main(async () => {
     }
 
     let maxConcurrency = input.maxConcurrency || 1000;
+
     const usingLoginCookies = loginCookies?.length > 0;
 
     if (usingLoginCookies) {
@@ -94,6 +97,9 @@ Apify.main(async () => {
 --------`);
         }
     }
+
+    // Metamorph to child actor for Posts
+    await bootstrapMetamorph(input);
 
     const doRequest = helpers.createGotRequester({
         proxyConfiguration: proxyConfiguration?.usesApifyProxy === true ? await Apify.createProxyConfiguration({
