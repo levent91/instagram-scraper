@@ -3,7 +3,7 @@ const vm = require('vm');
 const moment = require('moment');
 const Puppeteer = require('puppeteer'); // eslint-disable-line no-unused-vars
 const { gotScraping } = require('got-scraping');
-const { PAGE_TYPES, PAGE_TYPE_PATH_REGEXES, GRAPHQL_ENDPOINT } = require('./consts');
+const { PAGE_TYPES, PAGE_TYPE_PATH_REGEXES, GRAPHQL_ENDPOINT, SCRAPE_TYPES } = require('./consts');
 
 const { sleep, log } = Apify.utils;
 
@@ -823,6 +823,15 @@ const randomScrollWaitDuration = (min, max) => {
     return Math.floor(Math.random() * (max - min + 1) + min);
 };
 
+const sanitizeInput = (input) => {
+    // If user inputs posts -> posts (invalid), we can convert it to posts -> details which is a valid
+    const areUrlsPosts = input.directUrls?.length > 0
+        && input.directUrls.every((url) => getPageTypeFromUrl(url) === PAGE_TYPES.POST);
+    if (areUrlsPosts && (input.resultsType === SCRAPE_TYPES.POSTS || input.resultsType === SCRAPE_TYPES.DETAILS)) {
+        input.resultsType = SCRAPE_TYPES.POST_DETAIL;
+    }
+};
+
 module.exports = {
     getPageTypeFromUrl,
     randomScrollWaitDuration,
@@ -854,4 +863,5 @@ module.exports = {
     secondsToDate,
     handleResponse,
     parsePageScript,
+    sanitizeInput,
 };

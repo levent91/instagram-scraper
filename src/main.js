@@ -24,6 +24,8 @@ Apify.main(async () => {
     /** @type {any} */
     const input = await Apify.getInput();
 
+    helpers.sanitizeInput(input);
+
     // Crash actor depending if it works for specific input
     maybeDisableActor(input);
 

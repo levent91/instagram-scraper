@@ -13,7 +13,7 @@ module.exports.maybeDisableActor = (input) => {
     console.log(`page type: ${pageType}`);
 
     const isProfileToDetails = pageType === PAGE_TYPES.PROFILE && input.resultsType === SCRAPE_TYPES.DETAILS;
-    const isPostToDetails = pageType === PAGE_TYPES.POST && input.resultsType === SCRAPE_TYPES.DETAILS;
+    const isPostToDetails = pageType === PAGE_TYPES.POST && input.resultsType === SCRAPE_TYPES.POST_DETAIL;
     const isPostToComments = pageType === PAGE_TYPES.POST && input.resultsType === SCRAPE_TYPES.COMMENTS;
     const isPlacesPostsWithCookie = pageType === PAGE_TYPES.PLACE && input.resultsType === SCRAPE_TYPES.POSTS && isLogin;
     const isProfileToPosts = pageType === PAGE_TYPES.PROFILE && input.resultsType === SCRAPE_TYPES.POSTS;
