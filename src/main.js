@@ -98,7 +98,7 @@ Apify.main(async () => {
         }
     }
 
-    // Metamorph to child actor for Posts
+    // Metamorph to child actor for Profile -> Posts without login cookies
     await bootstrapMetamorph(input);
 
     const doRequest = helpers.createGotRequester({
