@@ -3,7 +3,7 @@ const vm = require('vm');
 const moment = require('moment');
 const Puppeteer = require('puppeteer'); // eslint-disable-line no-unused-vars
 const { gotScraping } = require('got-scraping');
-const { PAGE_TYPES, PAGE_TYPE_URL_REGEXES, GRAPHQL_ENDPOINT } = require('./consts');
+const { PAGE_TYPES, PAGE_TYPE_PATH_REGEXES, GRAPHQL_ENDPOINT, SCRAPE_TYPES } = require('./consts');
 
 const { sleep, log } = Apify.utils;
 
@@ -403,8 +403,11 @@ const createGotRequester = ({ proxyConfiguration }) => {
  * @param {string} url
  */
 const getPageTypeFromUrl = (url) => {
-    for (const [pageType, regex] of Object.entries(PAGE_TYPE_URL_REGEXES)) {
-        if (url.match(regex)) {
+    // This should not fail as we check URL validity on input schema level
+    // eslint-disable-next-line
+    const { pathname } = new URL(url);
+    for (const [pageType, regex] of Object.entries(PAGE_TYPE_PATH_REGEXES)) {
+        if (pathname.match(regex)) {
             return PAGE_TYPES[pageType];
         }
     }
@@ -820,6 +823,15 @@ const randomScrollWaitDuration = (min, max) => {
     return Math.floor(Math.random() * (max - min + 1) + min);
 };
 
+const sanitizeInput = (input) => {
+    // If user inputs posts -> posts (invalid), we can convert it to posts -> details which is a valid
+    const areUrlsPosts = input.directUrls?.length > 0
+        && input.directUrls.every((url) => getPageTypeFromUrl(url) === PAGE_TYPES.POST);
+    if (areUrlsPosts && (input.resultsType === SCRAPE_TYPES.POSTS || input.resultsType === SCRAPE_TYPES.DETAILS)) {
+        input.resultsType = SCRAPE_TYPES.POST_DETAIL;
+    }
+};
+
 module.exports = {
     getPageTypeFromUrl,
     randomScrollWaitDuration,
@@ -851,4 +863,5 @@ module.exports = {
     secondsToDate,
     handleResponse,
     parsePageScript,
+    sanitizeInput,
 };

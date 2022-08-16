@@ -80,12 +80,14 @@ module.exports = {
         USER: 'user',
         HASHTAG: 'hashtag',
     },
-    PAGE_TYPE_URL_REGEXES: {
-        PLACE: /https:\/\/(www\.)?instagram\.com\/explore\/locations\/.+/u,
-        STORY: /https:\/\/(www\.)?instagram\.com\/stories\/.+/u,
-        HASHTAG: /https:\/\/(www\.)?instagram\.com\/explore\/tags\/.+/u,
-        POST: /https:\/\/(www\.)?instagram\.com\/(p|reel|tv)\/.+/u,
-        PROFILE: /https:\/\/(www\.)?instagram\.com\/[^/]{2,}\/?$/u,
+    // We only care about paths, not query params (we strip them away before matching)
+    // Input schema should already catch invalid Instagram URLs
+    PAGE_TYPE_PATH_REGEXES: {
+        PLACE: /\/explore\/locations\/.+/u,
+        STORY: /\/stories\/.+/u,
+        HASHTAG: /\/explore\/tags\/.+/u,
+        POST: /\/(p|reel|tv)\/.+/u,
+        PROFILE: /\/[^/]{2,}\/?$/u,
     },
     // Instagrams GraphQL Endpoint URL
     GRAPHQL_ENDPOINT: 'https://www.instagram.com/graphql/query/',
