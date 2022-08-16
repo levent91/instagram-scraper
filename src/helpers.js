@@ -3,7 +3,7 @@ const vm = require('vm');
 const moment = require('moment');
 const Puppeteer = require('puppeteer'); // eslint-disable-line no-unused-vars
 const { gotScraping } = require('got-scraping');
-const { PAGE_TYPES, PAGE_TYPE_URL_REGEXES, GRAPHQL_ENDPOINT } = require('./consts');
+const { PAGE_TYPES, PAGE_TYPE_PATH_REGEXES, GRAPHQL_ENDPOINT } = require('./consts');
 
 const { sleep, log } = Apify.utils;
 
@@ -403,8 +403,11 @@ const createGotRequester = ({ proxyConfiguration }) => {
  * @param {string} url
  */
 const getPageTypeFromUrl = (url) => {
-    for (const [pageType, regex] of Object.entries(PAGE_TYPE_URL_REGEXES)) {
-        if (url.match(regex)) {
+    // This should not fail as we check URL validity on input schema level
+    // eslint-disable-next-line
+    const { pathname } = new URL(url);
+    for (const [pageType, regex] of Object.entries(PAGE_TYPE_PATH_REGEXES)) {
+        if (pathname.match(regex)) {
             return PAGE_TYPES[pageType];
         }
     }
