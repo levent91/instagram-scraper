@@ -588,20 +588,27 @@ class PublicScraper extends BaseScraper {
      */
     async scrapePost(context, ig) {
         const { entryData, pageData } = ig;
+        const { request: { userData, url } } = context;
         const { expandOwners } = this.options.input;
 
-        const item = entryData.PostPage[0].graphql.shortcode_media;
+        const item = entryData?.PostPage?.[0]?.graphql?.shortcode_media || userData.nonLoginInfo.data.data.shortcode_media;
 
-        let result = {
-            alt: item.accessibility_caption,
-            url: `https://www.instagram.com/p/${item.shortcode}`,
-            likesCount: item.edge_media_preview_like.count,
-            imageUrl: item.display_url,
-            firstComment: item.edge_media_to_caption?.edges?.[0]?.node?.text || '',
-            timestamp: new Date(parseInt(item.taken_at_timestamp, 10) * 1000).toISOString(),
-            locationName: item.location?.name ?? null,
-            ownerUsername: item.owner?.username ?? null,
-        };
+        let result;
+
+        if (entryData?.PostPage?.[0]?.graphql?.shortcode_media) {
+            result = {
+                alt: item.accessibility_caption,
+                url: `https://www.instagram.com/p/${item.shortcode}`,
+                likesCount: item.edge_media_preview_like.count,
+                imageUrl: item.display_url,
+                firstComment: item.edge_media_to_caption?.edges?.[0]?.node?.text || '',
+                timestamp: new Date(parseInt(item.taken_at_timestamp, 10) * 1000).toISOString(),
+                locationName: item.location?.name ?? null,
+                ownerUsername: item.owner?.username ?? null,
+            };
+        } else {
+            result = formatSinglePost(item);
+        }
 
         if (expandOwners && pageData.pageType !== PAGE_TYPES.PROFILE) {
             [result] = await this.expandOwnerDetails(context, [result]);
