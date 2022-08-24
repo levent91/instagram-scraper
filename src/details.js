@@ -50,6 +50,15 @@ const sidecarImages = (node) => formatDisplayResources(node.edge_sidecar_to_chil
  * @param {Record<string, any>} node
  */
 const formatSinglePost = (node) => {
+    let productUrl = null;
+
+    if (node.product_type === 'igtv') {
+        productUrl = `https://www.instagram.com/tv/${node.shortcode}`;
+    } else if (node.product_type === 'clips') {
+        productUrl = `https://www.instagram.com/reel/${node.shortcode}`;
+    } else {
+        productUrl = `https://www.instagram.com/p/${node.shortcode}`;
+    }
     const comments = {
         count: [
             node.comment_count,
@@ -78,15 +87,20 @@ const formatSinglePost = (node) => {
         caption,
         hashtags,
         mentions,
-        url: node.shortcode ? `https://www.instagram.com/p/${node.shortcode}/` : null,
+        url: productUrl || null,
         commentsCount: comments.count || comments.edges.length || 0,
-        firstComment: node.comments?.[0]?.text || node.comments?.edges?.[0]?.node?.text || '',
+        firstComment: node.comments?.[0]?.text || node.comments?.edges?.[0]?.node?.text || node?.edge_media_to_parent_comment?.edges?.[0]?.node?.text || '',
         latestComments: node.comments?.length ? node.comments.map(({ pk, user, text, created_at }) => ({
             id: pk ?? null,
             ownerUsername: user?.username ?? '',
             text,
             timestamp: secondsToDate(created_at),
         })) : node.comments?.edges?.length ? node.comments.edges.map(({ node: { id, owner: { username }, text, created_at } }) => ({
+            id,
+            ownerUsername: username,
+            text,
+            timestamp: secondsToDate(created_at),
+        })) : node.edge_media_to_parent_comment?.edges?.length ? node.edge_media_to_parent_comment.edges.map(({ node: { id, owner: { username }, text, created_at } }) => ({
             id,
             ownerUsername: username,
             text,
