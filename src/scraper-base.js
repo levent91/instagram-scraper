@@ -71,7 +71,7 @@ class BaseScraper extends Apify.PuppeteerCrawler {
                 }
             }],
             preNavigationHooks: [async ({ request, page }, gotoOptions) => {
-                gotoOptions.waitUntil = 'networkidle2';
+                gotoOptions.waitUntil = 'networkidle0';
                 request.userData.isInitial = request.userData.isInitial ? request.userData.isInitial : false;
                 await page.on('response', async (response) => {
                     try {
@@ -201,12 +201,12 @@ class BaseScraper extends Apify.PuppeteerCrawler {
                 }
 
                 if (!userData.isInitial && !userData.userInfo
-                    && ((request.url.includes('/p/') && (rest.input?.resultsType === SCRAPE_TYPES.DETAILS)))
-                && rest.input?.loginCookies?.length) {
+                    && ((request.url.includes('/p/') && (rest.input?.resultsType === SCRAPE_TYPES.DETAILS) && (!userData.nonLoginInfo || !userData.info)))
+                ) {
                     // sometimes need to reload page to get /info/ /user/ request
                     // todo: find a better way to do this
-                    await page.reload({ waitUntil: 'networkidle2' });
-                    await page.waitForTimeout(5000);
+                    await page.reload({ waitUntil: 'domcontentloaded' });
+                    await page.waitForTimeout(1000);
                     userData.isInitial = true;
                 }
 
