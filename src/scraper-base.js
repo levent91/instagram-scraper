@@ -50,7 +50,8 @@ class BaseScraper extends Apify.PuppeteerCrawler {
             useSessionPool: true,
             postNavigationHooks: [async ({ request, page }) => {
                 try {
-                    if (request.url.includes('/p/') && rest.input?.resultsType === SCRAPE_TYPES.DETAILS && rest.input?.loginCookies?.length) {
+                    if ((request.url.includes('/p/') && rest.input?.resultsType === SCRAPE_TYPES.DETAILS && rest.input?.loginCookies?.length)
+                    || (!request.url.includes('/p/'))) {
                         // hover to profile pic to trigger /info/ /user/ request
                         // you can't do it without login
                         try {
@@ -200,13 +201,22 @@ class BaseScraper extends Apify.PuppeteerCrawler {
                     }
                 }
 
-                if (!userData.isInitial && !userData.userInfo
-                    && ((request.url.includes('/p/') && (rest.input?.resultsType === SCRAPE_TYPES.DETAILS) && (!userData.nonLoginInfo || !userData.info)))
+                if (!userData.isInitial && ((!userData.userInfo && request.url.includes('/p/') && (rest.input?.resultsType === SCRAPE_TYPES.DETAILS) && (!userData.nonLoginInfo || !userData.info))
+                    || (!request.url.includes('/p/') && rest.input.resultsType === SCRAPE_TYPES.POSTS))
                 ) {
                     // sometimes need to reload page to get /info/ /user/ request
                     // todo: find a better way to do this
                     await page.reload({ waitUntil: 'domcontentloaded' });
                     await page.waitForTimeout(1000);
+
+                    // When scraping posts, need to merge first 12 posts with the rest of the posts after reload. We need a reload to get the response.
+                    if (rest.input.resultsType === SCRAPE_TYPES.POSTS && !userData.userInfo.data.data.user.edge_owner_to_timeline_media.edges) {
+                        throw new Error(`Couldn't get initial posts, trying again`);
+                    }
+                    if (rest.input.resultsType === SCRAPE_TYPES.POSTS && userData.userInfo?.data?.data?.user?.edge_owner_to_timeline_media?.edges?.length) {
+                        if (!userData?.jsonResponse?.data?.data?.user?.edge_owner_to_timeline_media?.edges?.length) userData.jsonResponse.data.data.user.edge_owner_to_timeline_media.edges = [];
+                        userData.jsonResponse.data.data.user.edge_owner_to_timeline_media.edges.unshift(...userData.userInfo.data.data.user.edge_owner_to_timeline_media.edges);
+                    }
                     userData.isInitial = true;
                 }
 
