@@ -50,8 +50,7 @@ class BaseScraper extends Apify.PuppeteerCrawler {
             useSessionPool: true,
             postNavigationHooks: [async ({ request, page }) => {
                 try {
-                    if ((request.url.includes('/p/') && rest.input?.resultsType === SCRAPE_TYPES.DETAILS && rest.input?.loginCookies?.length)
-                    || (!request.url.includes('/p/'))) {
+                    if ((request.url.includes('/p/') && rest.input?.resultsType === SCRAPE_TYPES.DETAILS && rest.input?.loginCookies?.length)) {
                         // hover to profile pic to trigger /info/ /user/ request
                         // you can't do it without login
                         try {
